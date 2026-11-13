@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1
+
+- Settings page: after "Turn on notifications" the card waits until Home Assistant has loaded the new
+  automation, so it shows "On" right away also when the card is on a hand-made dashboard.
+- Settings page: a card that Home Assistant replaced while it was working (the "Bambu" dashboard is rebuilt
+  when automations are added or removed) stops at once instead of waiting.
+
 ## 1.1.0
 
 - **Settings page** in the "Bambu" dashboard: a 5-step setup wizard with every setting in one place –

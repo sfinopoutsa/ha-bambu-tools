@@ -71,6 +71,9 @@ class BambuSetupCard extends HTMLElement {
 
   setConfig(config) { this._config = config || {}; }
 
+  // Put back on the page (e.g. after switching views): show fresh data and enabled buttons.
+  connectedCallback() { if (this._data) this._load(); }
+
   getCardSize() { return 12; }
 
   getGridOptions() { return { columns: 'full' }; }
@@ -357,7 +360,7 @@ class BambuSetupCard extends HTMLElement {
       this._msg.global = this._t('error', { e: e.message || JSON.stringify(e) });
     }
     await new Promise((r) => setTimeout(r, 600));
-    await this._load();
+    if (this.isConnected) await this._load(); // a replaced card has nothing left to show
   }
 
   async _createNotify(prefix) {
@@ -373,6 +376,13 @@ class BambuSetupCard extends HTMLElement {
         input: { print_status: p.statusEntity, notify_device: f.phone, notify_on: f.events, dashboard_path: `/${DASH}/overview` },
       },
     });
+    // Home Assistant reloads automations after the save; a new one shows up in hass.states a moment later.
+    // Wait for it (max 10 s), otherwise the card would still show "Turn on notifications".
+    // On the auto-generated "Bambu" dashboard the new entity makes HA rebuild the dashboard and this card
+    // is replaced by a fresh one, so stop waiting as soon as this one is no longer on the page.
+    const exists = () => Object.values(this._hass.states)
+      .some((s) => s.entity_id.startsWith('automation.') && s.attributes.id === id);
+    for (let i = 0; i < 40 && this.isConnected && !exists(); i++) await new Promise((r) => setTimeout(r, 250));
     this._msg.global = '';
   }
 
