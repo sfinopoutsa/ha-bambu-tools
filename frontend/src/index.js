@@ -2,4 +2,5 @@
 import './card.js';
 import './status-card.js';
 import './setup-card.js';
+import './collapse-card.js';
 import './strategy.js';

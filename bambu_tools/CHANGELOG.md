@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+
+- **Detail tiles are back** on every printer's page, like the first hand-made dashboard, in three groups:
+  *Print* (status, stage, progress, layers, remaining, start/end, weight, filament length, plate, speed, file),
+  *Temperatures* (nozzle, bed, chamber with targets, door) and *Printer & filament* (active filament, nozzle,
+  fans, air duct, timelapse, Wi-Fi, total usage). Only the entities a printer really has are shown.
+- The groups and the printer's Settings **open and close**; closed they show a short summary
+  (e.g. "Running · 89%"). Each browser remembers what was left open.
+- New card `bambu-collapse-card` (a group of cards that opens and closes) for your own dashboards.
+
 ## 1.2.0
 
 - **Settings on every printer's page** of the "Bambu" dashboard (at the bottom, full width):

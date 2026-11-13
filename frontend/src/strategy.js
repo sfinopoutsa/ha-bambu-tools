@@ -24,6 +24,42 @@ const letterIcon = (name) => {
   return /[a-z]/.test(ch) ? `mdi:alpha-${ch}-box` : 'mdi:printer-3d';
 };
 
+// Detail tiles, like the first hand-made dashboard: the useful ha-bambulab entities of the printer in three
+// groups that open and close (bambu-collapse-card, closed at first, remembered per browser). Only entities that
+// exist are shown, so every model gets its own set (e.g. chamber and door on the H2S, active filament on the A1).
+// "!" = full-width tile. The last list is the short summary shown next to the group's title.
+const DETAILS = [
+  ['print', 'd_print', 'mdi:progress-clock', ['sensor:print_status', 'sensor:current_stage', 'sensor:print_progress', 'sensor:current_layer',
+    'sensor:total_layer_count', 'sensor:remaining_time', 'sensor:start_time', 'sensor:end_time', 'sensor:print_weight',
+    'sensor:print_length', 'sensor:print_bed_type', 'sensor:speed_profile', 'sensor:task_name!'],
+  ['sensor:print_status', 'sensor:print_progress']],
+  ['temps', 'd_temps', 'mdi:thermometer', ['sensor:nozzle_temperature', 'sensor:nozzle_target_temperature', 'sensor:bed_temperature',
+    'sensor:bed_target_temperature', 'sensor:chamber_temperature', 'sensor:chamber_target_temperature', 'binary_sensor:door'],
+  ['sensor:nozzle_temperature', 'sensor:bed_temperature', 'sensor:chamber_temperature']],
+  ['printer', 'd_printer', 'mdi:printer-3d-nozzle', ['sensor:active_tray!', 'binary_sensor:extruder_filament', 'sensor:nozzle_type',
+    'sensor:nozzle_size', 'sensor:cooling_fan_speed', 'sensor:heatbreak_fan_speed', 'sensor:aux_fan_speed', 'sensor:chamber_fan_speed',
+    'sensor:airduct_mode', 'binary_sensor:timelapse', 'sensor:wi_fi_signal', 'sensor:total_usage'],
+  ['sensor:active_tray', 'sensor:nozzle_size']],
+];
+const entityOf = (p, spec) => { const [domain, key] = spec.replace('!', '').split(':'); return { key, entity: `${domain}.${p.prefix}_${key}` }; };
+function detailSections(p, hass, lng) {
+  return DETAILS.map(([id, title, icon, list, summary]) => {
+    const tiles = list.map((spec) => {
+      const { key, entity } = entityOf(p, spec);
+      if (!hass.states[entity]) return null;
+      return { type: 'tile', entity, name: t(lng, `e_${key}`), ...(spec.endsWith('!') ? { full: true } : {}) };
+    }).filter(Boolean);
+    if (!tiles.length) return null;
+    return {
+      type: 'grid',
+      cards: [{
+        type: 'custom:bambu-collapse-card', key: `${p.prefix}:${id}`, title: t(lng, title), icon,
+        summary: summary.map((s) => entityOf(p, s).entity).filter((e) => hass.states[e]), cards: tiles,
+      }],
+    };
+  }).filter(Boolean);
+}
+
 // "Settings" part of a printer's page: the printer's own controls that ha-bambulab offers (few in cloud mode,
 // many with LAN Only + Developer Mode) and the setup card limited to this printer (checks, notifications,
 // links). Like the Settings page it follows the Home Assistant language.
@@ -34,13 +70,13 @@ function settingsCards(p, hass) {
       && hass.states[e.entity_id] && hass.states[e.entity_id].state !== 'unavailable')
     .map((e) => e.entity_id)
     .sort();
-  return [
-    { type: 'heading', heading: t(hass, 'setup'), heading_style: 'title', icon: 'mdi:cog' },
-    ...(controls.length ? [{
-      type: 'entities', title: t(hass, 'controls'), entities: controls, state_color: true, show_header_toggle: false, grid_options: { columns: 'full' },
-    }] : []),
-    { type: 'custom:bambu-setup-card', printer: p.prefix, grid_options: { columns: 'full' } },
-  ];
+  return [{
+    type: 'custom:bambu-collapse-card', key: `${p.prefix}:settings`, title: t(hass, 'setup'), icon: 'mdi:cog',
+    cards: [
+      ...(controls.length ? [{ type: 'entities', title: t(hass, 'controls'), entities: controls, state_color: true, show_header_toggle: false, full: true }] : []),
+      { type: 'custom:bambu-setup-card', printer: p.prefix, full: true },
+    ],
+  }];
 }
 
 function printerView(p, hass, c, lng) {
@@ -66,6 +102,7 @@ function printerView(p, hass, c, lng) {
     sections: [
       { type: 'grid', column_span: 2, cards: [...c.camera(p, hass), c.layers(p, 10, 560)] },
       { type: 'grid', cards: side },
+      ...detailSections(p, hass, lng),
       // last, full width: on a phone it comes after the status card, not before it
       { type: 'grid', column_span: 3, cards: settingsCards(p, hass) },
     ],

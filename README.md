@@ -12,6 +12,7 @@ One Home Assistant **app** for Bambu Lab printers:
 - **Bambu Studio in the browser** – the full slicer, on your home network.
 - **Settings page** – a setup wizard with every setting in one place (printers, notifications, dashboard, slicer),
   plus a Settings part on every printer's page (its controls, checks and notifications).
+- **Detail tiles** on every printer's page – print, temperatures, nozzle, fans, Wi-Fi … – in groups that open and close.
 
 Greek and English UI (follows the Home Assistant language).
 
