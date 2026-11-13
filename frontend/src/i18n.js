@@ -28,7 +28,7 @@ const STR = {
     'light': 'Chamber light', 'cam.off': 'Turn the camera off', 'cam.on': 'Turn the camera on',
     'hms': 'HMS messages: {n}', 'perr': 'Print error', 'details': 'tap for details',
     'fil': 'Filament: <b>{n}</b>', 'fil.none': 'No active filament',
-    'overview': 'Overview',
+    'overview': 'Overview', 'spool': 'External spool',
   },
   el: {
     'status.running': 'Τυπώνει', 'status.prepare': 'Προετοιμασία', 'status.slicing': 'Slicing', 'status.pause': 'Σε παύση',
@@ -58,7 +58,7 @@ const STR = {
     'light': 'Φως θαλάμου', 'cam.off': 'Κλείσε την κάμερα', 'cam.on': 'Άνοιξε την κάμερα',
     'hms': 'Μηνύματα HMS: {n}', 'perr': 'Σφάλμα εκτύπωσης', 'details': 'πάτα για λεπτομέρειες',
     'fil': 'Νήμα: <b>{n}</b>', 'fil.none': 'Κανένα ενεργό νήμα',
-    'overview': 'Επισκόπηση',
+    'overview': 'Επισκόπηση', 'spool': 'Εξωτερική μπομπίνα',
   },
 };
 

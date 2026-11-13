@@ -18,21 +18,30 @@ function cards(lng) {
   return { status, camera, layers };
 }
 
-function printerView(p, hass, c) {
+// Tab icon: Ⓐ / Ⓗ … from the printer's name, like the hand-made dashboard.
+const letterIcon = (name) => {
+  const ch = (name || '').trim().charAt(0).toLowerCase();
+  return /[a-z]/.test(ch) ? `mdi:alpha-${ch}-box` : 'mdi:printer-3d';
+};
+
+function printerView(p, hass, c, lng) {
   const side = [
     c.status(p),
     { type: 'picture-entity', entity: `image.${p.prefix}_cover_image`, name: 'Plate', show_state: false, grid_options: { columns: 'full', rows: 4 } },
   ];
   // ha-bambulab ships these cards and registers them itself (they may still be loading right now).
   for (const ams of p.amsDevices) {
-    side.push({ type: 'heading', heading: 'AMS', heading_style: 'subtitle', icon: 'mdi:tray-full' });
-    side.push({ type: 'custom:ha-bambulab-ams-card', ams, grid_options: { columns: 'full' } });
+    side.push({ type: 'heading', heading: ams.name, heading_style: 'subtitle', icon: 'mdi:tray-full' });
+    side.push({ type: 'custom:ha-bambulab-ams-card', ams: ams.id, grid_options: { columns: 'full' } });
   }
-  for (const spool of p.spoolDevices) side.push({ type: 'custom:ha-bambulab-spool-card', spool, grid_options: { columns: 6, rows: 3 } });
+  for (const spool of p.spoolDevices) {
+    side.push({ type: 'heading', heading: t(lng, 'spool'), heading_style: 'subtitle', icon: 'mdi:printer-3d-nozzle-outline' });
+    side.push({ type: 'custom:ha-bambulab-spool-card', spool: spool.id, grid_options: { columns: 6, rows: 3 } });
+  }
   return {
     title: p.name,
     path: p.prefix.replace(/_/g, '-'),
-    icon: 'mdi:printer-3d',
+    icon: letterIcon(p.name),
     type: 'sections',
     max_columns: 3,
     sections: [
@@ -67,7 +76,7 @@ class BambuToolsDashboardStrategy {
           max_columns: Math.min(printers.length, 3),
           sections: printers.map((p) => ({ type: 'grid', cards: [c.status(p), ...c.camera(p, hass), c.layers(p, 7, 400)] })),
         },
-        ...printers.map((p) => printerView(p, hass, c)),
+        ...printers.map((p) => printerView(p, hass, c, lng)),
       ],
     };
   }

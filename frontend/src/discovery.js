@@ -29,8 +29,8 @@ export function findPrinters(hass) {
       deviceId: e.device_id,
       statusEntity: e.entity_id,
       trays,
-      amsDevices: amsDevices.map((d) => d.id),
-      spoolDevices: spoolDevices.map((d) => d.id),
+      amsDevices: amsDevices.map((d) => ({ id: d.id, name: d.name_by_user || d.model || d.name || 'AMS' })),
+      spoolDevices: spoolDevices.map((d) => ({ id: d.id, name: d.name_by_user || d.name || '' })),
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
