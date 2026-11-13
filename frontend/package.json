@@ -1,0 +1,16 @@
+{
+  "name": "bambu-tools-frontend",
+  "version": "1.2.0",
+  "description": "Bambu Tools frontend: live G-code layer view, printer status card, dashboard strategy",
+  "scripts": {
+    "test": "node test/parse-test.mjs",
+    "build": "esbuild src/worker-entry.js --bundle --format=iife --minify --outfile=build/worker.wjs && esbuild src/index.js --bundle --format=esm --minify --loader:.wjs=text --legal-comments=eof --outfile=../bambu_tools/rootfs/opt/bambu-tools/www/bambu-tools.js"
+  },
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "three": "0.187.0"
+  },
+  "private": "true"
+}

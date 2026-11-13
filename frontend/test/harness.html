@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layer card test</title>
+<style>
+  :root { --primary-text-color:#e1e1e1; --secondary-text-color:#9b9b9b; --card-background-color:#1c1c1c; --divider-color:#3a3a3a; --primary-color:#03a9f4; }
+  body { margin:0; padding:16px; background:#111; font-family: Roboto, system-ui, sans-serif; color:#ddd; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap:16px; }
+  ha-card { display:block; background: var(--card-background-color); border-radius:12px; border:1px solid #2a2a2a; }
+  .ctl { display:flex; gap:8px; align-items:center; margin:8px 0 4px; font-size:13px; flex-wrap:wrap; }
+  .ctl button { font:inherit; padding:4px 10px; }
+</style>
+</head>
+<body>
+<div class="grid" id="grid"></div>
+<script type="module">
+import '../dist/bambu-layer-card.js';
+const sims = [
+  { name: 'Printer A', prefix: 'printer_a', file: 'example-a.gcode', layers: 582, task: 'example A', start: 115, step: 1 },
+  { name: 'Printer B', prefix: 'printer_b', file: 'example-b.gcode', layers: 110, task: 'example B', start: 1, step: 1 },
+  { name: 'H2S no file', prefix: 'h2s_nofile', file: 'unknown', layers: 136, task: 'toolbox', start: 71, step: 0 },
+];
+window.sims = [];
+for (const s of sims) {
+  const wrap = document.createElement('div');
+  const ctl = document.createElement('div'); ctl.className = 'ctl';
+  ctl.innerHTML = `<b>${s.name}</b> <button data-a="play">▶ replay</button><button data-a="stop">■</button><button data-a="finish">finish</button><span class="st"></span>`;
+  const card = document.createElement('bambu-layer-card');
+  card.setConfig({ printer: s.prefix, height: 440 });
+  const status = document.createElement('bambu-status-card');
+  status.setConfig({ printer: s.prefix, trays: [`sensor.${s.prefix}_tray_1`, `sensor.${s.prefix}_tray_2`, `sensor.${s.prefix}_ext`] });
+  status.style.marginBottom = '12px';
+  wrap.append(ctl, status, card);
+  document.getElementById('grid').append(wrap);
+  const state = { layer: s.start, status: 'running' };
+  const mk = () => {
+    const p = s.prefix;
+    const st = (v, a = {}) => ({ state: String(v), attributes: a });
+    const prog = Math.round(100 * state.layer / s.layers);
+    return {
+      themes: { darkMode: true },
+      states: {
+        [`sensor.${p}_current_layer`]: st(state.layer),
+        [`sensor.${p}_total_layer_count`]: st(s.layers),
+        [`sensor.${p}_gcode_file_downloaded`]: st(s.file),
+        [`sensor.${p}_serial_number`]: st('TESTSERIAL'),
+        [`sensor.${p}_print_status`]: st(state.status, { friendly_name: `${s.name} Print status` }),
+        [`sensor.${p}_print_progress`]: st(prog),
+        [`sensor.${p}_remaining_time`]: st(((s.layers - state.layer) * 0.01).toFixed(3)),
+        [`sensor.${p}_task_name`]: st(s.task),
+        [`sensor.${p}_current_stage`]: st(state.status === 'running' ? 'printing' : 'idle'),
+        [`sensor.${p}_nozzle_temperature`]: st(258.6), [`sensor.${p}_nozzle_target_temperature`]: st(260),
+        [`sensor.${p}_bed_temperature`]: st(72), [`sensor.${p}_bed_target_temperature`]: st(90),
+        [`sensor.${p}_chamber_temperature`]: st(45),
+        [`binary_sensor.${p}_online`]: st('on'), [`binary_sensor.${p}_print_error`]: st('off'), [`binary_sensor.${p}_hms_errors`]: st('off', { Count: 0 }),
+        [`switch.${p}_camera`]: st(state.cam ?? 'on', { friendly_name: 'Camera' }), [`light.${p}_chamber_light`]: st(state.light ?? 'on'),
+        [`sensor.${p}_tray_1`]: st('Bambu PETG Translucent', { color: '#d1d5dbFF', type: 'PETG', active: false, friendly_name: 'Tray 1' }),
+        [`sensor.${p}_tray_2`]: st('eSUN PLA+', { color: '#101410FF', type: 'PLA', active: true, friendly_name: 'Tray 2' }),
+        [`sensor.${p}_ext`]: st('Empty', { color: '#00000000', empty: true, active: false, friendly_name: 'External' }),
+      },
+      formatEntityState: (o) => ({ printing: 'Printing', idle: 'Idle' }[o.state] || o.state),
+      callService: (domain, service, data) => { const id = data.entity_id; if (id.startsWith('switch.')) state.cam = (state.cam ?? 'on') === 'on' ? 'off' : 'on'; else state.light = (state.light ?? 'on') === 'on' ? 'off' : 'on'; push(); },
+      fetchWithAuth: async (url) => {
+        const m = url.match(/\/api\/bambu_lab\/file_cache\/TESTSERIAL\/prints\/cache\/(.+)$/);
+        if (!m) return new Response('nf', { status: 404 });
+        return fetch('fixtures/' + m[1]);
+      },
+    };
+  };
+  const push = () => { const hs = mk(); card.hass = hs; status.hass = hs; ctl.querySelector('.st').textContent = `layer ${state.layer} · ${state.status}`; };
+  push();
+  let timer = 0;
+  ctl.addEventListener('click', (e) => {
+    const a = e.target.dataset.a; if (!a) return;
+    if (a === 'play') { clearInterval(timer); state.status = 'running'; timer = setInterval(() => { state.layer = Math.min(s.layers, state.layer + 1); if (state.layer >= s.layers) { clearInterval(timer); state.status = 'finish'; } push(); }, 250); }
+    if (a === 'stop') clearInterval(timer);
+    if (a === 'finish') { clearInterval(timer); state.status = 'finish'; state.layer = s.layers; push(); }
+  });
+  window.sims.push({ s, state, push, card, status });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+configuration:
+  start_slicer:
+    name: Εκκίνηση slicer
+    description: Τρέχει τον Bambu Studio στον browser (~1 GB RAM). Κλειστό = μόνο εγκατάσταση/ενημέρωση των κομματιών του Home Assistant.
+  username:
+    name: Όνομα χρήστη slicer
+    description: Όνομα για τη σελίδα του slicer.
+  password:
+    name: Κωδικός slicer
+    description: Υποχρεωτικός όταν τρέχει ο slicer.
+  dark_mode:
+    name: Σκούρο θέμα
+    description: Σκούρο θέμα στον Bambu Studio.
+  install_ha_bambulab:
+    name: Εγκατάσταση ha-bambulab
+    description: Βάζει την πιο πρόσφατη έκδοση του ha-bambulab στο custom_components αν λείπει (θέλει ένα restart του Home Assistant).
+  create_dashboard:
+    name: Dashboard «Bambu»
+    description: Φτιάχνει dashboard που βρίσκει μόνο του τους εκτυπωτές (μόνο αν δεν υπάρχει ήδη).
+network:
+  3001/tcp: Bambu Studio (HTTPS)

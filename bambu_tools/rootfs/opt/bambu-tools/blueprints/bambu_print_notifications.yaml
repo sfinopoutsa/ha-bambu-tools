@@ -1,0 +1,105 @@
+blueprint:
+  name: "Bambu Tools: print notifications"
+  description: >-
+    Sends a notification to your phone (Home Assistant Companion app) when a Bambu Lab print
+    finishes, fails or pauses, or when the printer reports an HMS message. The notification
+    shows the printer camera and opens the dashboard when tapped. Needs the ha-bambulab
+    integration. ·
+    Ειδοποίηση στο κινητό όταν μια εκτύπωση τελειώνει, αποτυγχάνει ή μπαίνει σε παύση,
+    ή όταν ο εκτυπωτής βγάζει μήνυμα HMS, με εικόνα από την κάμερα.
+  domain: automation
+  author: Bambu Tools
+  source_url: https://github.com/sfinopoutsa/ha-bambu-tools/blob/main/bambu_tools/rootfs/opt/bambu-tools/blueprints/bambu_print_notifications.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    print_status:
+      name: Printer (print status sensor) / Εκτυπωτής
+      description: The "Print status" sensor of the printer, from ha-bambulab.
+      selector:
+        entity:
+          filter:
+            - integration: bambu_lab
+              domain: sensor
+    notify_device:
+      name: Phone / Κινητό
+      description: A phone with the Home Assistant Companion app.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    notify_on:
+      name: Notify on / Ειδοποίηση για
+      default: [finish, failed, pause, hms]
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Print finished / Τέλος
+              value: finish
+            - label: Print failed / Αποτυχία
+              value: failed
+            - label: Print paused / Παύση
+              value: pause
+            - label: HMS message / Μήνυμα HMS
+              value: hms
+    dashboard_path:
+      name: Page to open / Σελίδα που ανοίγει
+      default: /bambu-tools/overview
+      selector:
+        text: {}
+
+mode: queued
+
+trigger_variables:
+  status_entity: !input print_status
+  hms_entity: "{{ status_entity | replace('sensor.', 'binary_sensor.') | regex_replace('_print_status$', '_hms_errors') }}"
+
+triggers:
+  - trigger: state
+    entity_id: !input print_status
+    to: [finish, failed, pause]
+    id: status
+  - trigger: template
+    value_template: "{{ is_state(hms_entity, 'on') }}"
+    id: hms
+
+variables:
+  notify_on: !input notify_on
+  dashboard_path: !input dashboard_path
+  prefix: "{{ status_entity.split('.')[1] | regex_replace('_print_status$', '') }}"
+  dev: "{{ device_id(status_entity) }}"
+  name: "{{ device_attr(dev, 'name_by_user') or device_attr(dev, 'name') or prefix }}"
+  task: "{{ states('sensor.' ~ prefix ~ '_task_name') }}"
+  layer: "{{ states('sensor.' ~ prefix ~ '_current_layer') }}/{{ states('sensor.' ~ prefix ~ '_total_layer_count') }}"
+  progress: "{{ states('sensor.' ~ prefix ~ '_print_progress') }}"
+  st: "{{ trigger.to_state.state if trigger.id == 'status' else 'hms' }}"
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.id == 'hms' or (trigger.from_state is not none
+         and trigger.from_state.state not in ['unavailable', 'unknown']) }}
+  - condition: template
+    value_template: "{{ st in notify_on }}"
+
+actions:
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: >-
+      {% if st == 'hms' %}⚠️ {{ name }}: HMS
+      {%- elif st == 'finish' %}✅ {{ name }}: finished / τελείωσε
+      {%- elif st == 'failed' %}❌ {{ name }}: failed / απέτυχε
+      {%- else %}⏸️ {{ name }}: paused / σε παύση{% endif %}
+    message: >-
+      {% if st == 'hms' %}{{ state_attr(hms_entity, 'Count') }} HMS · {{ task }}
+      {%- elif st == 'finish' %}{{ task }}
+      {%- else %}{{ task }} · layer {{ layer }} ({{ progress }}%){% endif %}
+    data:
+      url: "{{ dashboard_path }}"
+      clickAction: "{{ dashboard_path }}"
+      entity_id: "camera.{{ prefix }}_camera"
+      image: "/api/camera_proxy/camera.{{ prefix }}_camera"
+      push:
+        interruption-level: "{{ 'time-sensitive' if st in ['failed', 'pause', 'hms'] else 'active' }}"

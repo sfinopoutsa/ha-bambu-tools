@@ -1,0 +1,9 @@
+#!/usr/bin/with-contenv bash
+# Files copied into the app folder over Samba (presets, projects, a migrated profile) belong to root,
+# but Bambu Studio runs as the "abc" user and exits at start-up if it cannot write its config/log dirs.
+if command -v lsiown >/dev/null 2>&1; then
+  lsiown -R abc:abc /config
+else
+  chown -R abc:abc /config
+fi
+echo "[bambu-tools] /config ownership set to abc"

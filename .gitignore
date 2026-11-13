@@ -1,0 +1,7 @@
+node_modules/
+frontend/build/
+frontend/test/fixtures/
+*.gcode
+*.gcode.3mf
+.DS_Store
+__pycache__/

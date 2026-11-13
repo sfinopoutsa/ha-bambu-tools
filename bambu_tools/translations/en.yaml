@@ -1,0 +1,21 @@
+configuration:
+  start_slicer:
+    name: Start the slicer
+    description: Run Bambu Studio in the browser (about 1 GB of RAM). Turn off to only install/update the Home Assistant parts.
+  username:
+    name: Slicer user name
+    description: User name for the slicer web page.
+  password:
+    name: Slicer password
+    description: Required when the slicer is on.
+  dark_mode:
+    name: Dark mode
+    description: Dark theme in Bambu Studio.
+  install_ha_bambulab:
+    name: Install ha-bambulab
+    description: Install the latest ha-bambulab release into custom_components if it is missing (needs one Home Assistant restart).
+  create_dashboard:
+    name: Create the "Bambu" dashboard
+    description: Create a dashboard that finds your printers automatically (only if it does not exist yet).
+network:
+  3001/tcp: Bambu Studio (HTTPS)

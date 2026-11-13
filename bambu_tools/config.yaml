@@ -1,0 +1,53 @@
+name: Bambu Tools
+version: "1.0.0"
+slug: bambu_tools
+description: >-
+  Bambu Lab printers in Home Assistant: live 3D layer view, status cards, auto dashboard,
+  phone notifications and Bambu Studio in the browser. Installs ha-bambulab. Unofficial.
+url: https://github.com/sfinopoutsa/ha-bambu-tools
+arch:
+  - amd64
+init: false
+startup: application
+boot: manual
+# Talks to Home Assistant Core (dashboard resource, "Bambu" dashboard, notifications).
+homeassistant_api: true
+# Selkies wants a big /dev/shm (docker --shm-size=1gb); apps can't set it, so share the host's.
+host_ipc: true
+# GPU (/dev/dri) for the slicer's rendering and the stream's video encoding.
+video: true
+ports:
+  3001/tcp: 3001
+ports_description:
+  3001/tcp: Bambu Studio (HTTPS, self-signed)
+webui: https://[HOST]:[PORT:3001]
+map:
+  - type: app_config
+    read_only: false
+    path: /config
+  - type: homeassistant_config
+    read_only: false
+    path: /homeassistant
+  - type: share
+    read_only: false
+  - type: media
+    read_only: false
+environment:
+  START_DOCKER: "false"
+  PIXELFLUX_WAYLAND: "true"
+  # Bambu Studio's embedded web pages (WebKit) cannot build their bubblewrap sandbox inside an app.
+  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
+options:
+  start_slicer: true
+  username: bambu
+  password: ""
+  dark_mode: true
+  install_ha_bambulab: true
+  create_dashboard: true
+schema:
+  start_slicer: bool
+  username: str
+  password: password?
+  dark_mode: bool
+  install_ha_bambulab: bool
+  create_dashboard: bool
