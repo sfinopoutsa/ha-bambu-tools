@@ -21,12 +21,19 @@ Everything for Bambu Lab printers in Home Assistant, in one app:
    `www` folder), **restart Home Assistant** once (Settings → System → Restart).
 3. **Settings → Devices & services → Add integration → Bambu Lab** and connect your printers
    (Bambu Cloud login, or LAN with IP + serial + access code).
-4. Open **Bambu** in the sidebar. For notifications: **Settings → Automations → Create automation →
-   Bambu Tools: print notifications**, pick the printer and your phone.
+4. Open **Bambu** in the sidebar → **Settings** tab (⚙): it checks every printer and turns on phone
+   notifications with one click.
 5. Slicer: **Open Web UI** → accept the self-signed certificate → log in with the user name and password.
 
 The app only needs to run once to install or update the Home Assistant parts. Start it again when you want
 the slicer, and stop it afterwards on small machines.
+
+## Settings page
+
+The **Bambu** dashboard has a **Settings** tab (⚙) with everything in one place, in the Home Assistant
+language: connect printers, check each printer (camera, G-code storage, Developer Mode, firmware), turn on
+phone notifications with one click, pick the dashboard language, and change the app options – including the
+slicer password – without opening the app page. Needs an administrator.
 
 ## Options
 
@@ -75,7 +82,7 @@ the slicer, and stop it afterwards on small machines.
 1. Configuration → **κωδικός** για τον slicer → Save → Start.
 2. Αν σου το ζητήσει, **restart** του Home Assistant.
 3. Settings → Devices & services → **Bambu Lab** → σύνδεση εκτυπωτών.
-4. Sidebar → **Bambu**. Ειδοποιήσεις: Automations → *Bambu Tools: print notifications*.
+4. Sidebar → **Bambu** → καρτέλα **Ρυθμίσεις** (⚙): έλεγχος εκτυπωτών, ειδοποιήσεις με ένα κλικ, όλες οι επιλογές.
 5. Slicer: **Open Web UI** (αποδοχή πιστοποιητικού, σύνδεση).
 
 Στους H2D/H2S/H2C: USB stick + «Store Sent Files on External Storage» για το live layer view, και «LAN Only

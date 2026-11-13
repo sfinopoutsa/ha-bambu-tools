@@ -290,9 +290,9 @@ def main():
         if state.get("welcomed") != version:
             notify(ws, "Bambu Tools",
                    "**EN:** Dashboard **Bambu** (sidebar), cards `bambu-layer-card` / `bambu-status-card` and the blueprint "
-                   "*Bambu Tools: print notifications* are ready. The slicer opens from the app page (Open Web UI).\n\n"
+                   "*Bambu Tools: print notifications* are ready. Open **Bambu → Settings** to finish the set-up.\n\n"
                    "**EL:** Έτοιμα: dashboard **Bambu** στο πλάι, τα cards και το blueprint ειδοποιήσεων. "
-                   "Ο slicer ανοίγει από τη σελίδα του app (Open Web UI).",
+                   "Άνοιξε **Bambu → Ρυθμίσεις** για να ολοκληρώσεις το στήσιμο.",
                    "bambu_tools_ready")
             state["welcomed"] = version
     finally:

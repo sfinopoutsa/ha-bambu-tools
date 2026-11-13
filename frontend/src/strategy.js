@@ -55,18 +55,13 @@ class BambuToolsDashboardStrategy {
   static async generate(config, hass) {
     const printers = findPrinters(hass);
     const lng = config.language || hass;
-    if (!printers.length) {
-      return {
-        title: 'Bambu',
-        views: [{
-          title: 'Bambu', path: 'overview', type: 'panel',
-          cards: [{
-            type: 'markdown',
-            content: '## Δεν βρέθηκαν εκτυπωτές / No printers found\n\nΠρόσθεσε πρώτα την integration **Bambu Lab** (ha-bambulab): Settings → Devices & services → Add integration → Bambu Lab.\n\nAdd the **Bambu Lab** integration (ha-bambulab) first, then reload this page.',
-          }],
-        }],
-      };
-    }
+    // "Settings" page: the setup wizard (also the only page until a printer is connected).
+    // The wizard always follows the Home Assistant language, not the dashboard's `language` option.
+    const setup = {
+      title: t(hass, 'setup'), path: 'setup', icon: 'mdi:cog', type: 'panel',
+      cards: [{ type: 'custom:bambu-setup-card' }],
+    };
+    if (!printers.length) return { title: config.title || 'Bambu', views: [{ ...setup, path: 'overview' }] };
     const c = cards(config.language);
     return {
       title: config.title || 'Bambu',
@@ -77,6 +72,7 @@ class BambuToolsDashboardStrategy {
           sections: printers.map((p) => ({ type: 'grid', cards: [c.status(p), ...c.camera(p, hass), c.layers(p, 7, 400)] })),
         },
         ...printers.map((p) => printerView(p, hass, c, lng)),
+        setup,
       ],
     };
   }

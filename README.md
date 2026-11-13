@@ -10,6 +10,7 @@ One Home Assistant **app** for Bambu Lab printers:
 - **Automatic "Bambu" dashboard** – finds every ha-bambulab printer (overview + one page per printer).
 - **Phone notifications** blueprint – finished, failed, paused, HMS, with the camera image.
 - **Bambu Studio in the browser** – the full slicer, on your home network.
+- **Settings page** – a setup wizard with every setting in one place (printers, notifications, dashboard, slicer).
 
 Greek and English UI (follows the Home Assistant language).
 
@@ -24,7 +25,7 @@ Greek and English UI (follows the Home Assistant language).
    or **Settings → Apps → App store → ⋮ → Repositories** → `https://github.com/sfinopoutsa/ha-bambu-tools`.
 2. Install **Bambu Tools**, set a slicer password in **Configuration**, **Start**.
 3. Restart Home Assistant when the notification asks for it, then add the **Bambu Lab** integration.
-4. Open **Bambu** in the sidebar.
+4. Open **Bambu** in the sidebar – the **Settings** tab (⚙) walks you through the rest.
 
 Full instructions, options and security notes: [bambu_tools/DOCS.md](bambu_tools/DOCS.md).
 
