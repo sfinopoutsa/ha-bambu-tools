@@ -16,7 +16,9 @@
 <body>
 <div class="grid" id="grid"></div>
 <script type="module">
-import '../dist/bambu-layer-card.js';
+// Serve the repository root (python -m http.server 8765) and open /frontend/test/harness.html.
+// G-code for the replay goes into frontend/test/fixtures/ (not committed).
+import '../../bambu_tools/rootfs/opt/bambu-tools/www/bambu-tools.js';
 const sims = [
   { name: 'Printer A', prefix: 'printer_a', file: 'example-a.gcode', layers: 582, task: 'example A', start: 115, step: 1 },
   { name: 'Printer B', prefix: 'printer_b', file: 'example-b.gcode', layers: 110, task: 'example B', start: 1, step: 1 },
