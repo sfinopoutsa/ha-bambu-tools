@@ -1,7 +1,7 @@
 configuration:
   start_slicer:
     name: Εκκίνηση slicer
-    description: Τρέχει τον Bambu Studio στον browser (~1 GB RAM). Κλειστό = μόνο εγκατάσταση/ενημέρωση των κομματιών του Home Assistant.
+    description: Τρέχει τον Bambu Studio στον browser (~1 GB RAM· μόνο σε x86-64, όχι σε Raspberry Pi). Κλειστό = μόνο εγκατάσταση/ενημέρωση των κομματιών του Home Assistant.
   username:
     name: Όνομα χρήστη slicer
     description: Όνομα για τη σελίδα του slicer.

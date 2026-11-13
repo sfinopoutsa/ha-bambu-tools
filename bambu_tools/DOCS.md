@@ -13,6 +13,12 @@ Everything for Bambu Lab printers in Home Assistant, in one app:
 
 > Unofficial project. Not affiliated with or endorsed by Bambu Lab.
 
+## Raspberry Pi
+
+On a Raspberry Pi (or any 64-bit ARM machine) the app installs everything **except the slicer**: Bambu Lab
+publishes Bambu Studio for Linux only for x86-64. ha-bambulab, the cards, the *Bambu* dashboard, the Settings
+page and the notifications work the same. You don't need a slicer password there; `start_slicer` is ignored.
+
 ## First start
 
 1. **Configuration** → set a **password** for the slicer (or turn **start_slicer** off if you only want the
@@ -47,7 +53,7 @@ On a dashboard of your own: `type: custom:bambu-setup-card` with `printer: <enti
 
 | Option | Default | Meaning |
 |---|---|---|
-| `start_slicer` | `true` | Run Bambu Studio (≈1 GB RAM). Off = only install/update, then idle. |
+| `start_slicer` | `true` | Run Bambu Studio (≈1 GB RAM, x86-64 only). Off = only install/update, then idle. |
 | `username` / `password` | `bambu` / – | Login for the slicer page. A password is required when the slicer is on. |
 | `dark_mode` | `true` | Dark theme in Bambu Studio. |
 | `install_ha_bambulab` | `true` | Install the latest ha-bambulab release if it is missing. An existing install (e.g. from HACS) is never touched. |
@@ -94,6 +100,9 @@ On a dashboard of your own: `type: custom:bambu-setup-card` with `printer: <enti
    Κάθε εκτυπωτής έχει και δικές του ρυθμίσεις στο κάτω μέρος της σελίδας του, και ομάδες με όλες τις πληροφορίες
    (Εκτύπωση, Θερμοκρασίες, Εκτυπωτής & νήμα) που ανοιγοκλείνουν.
 5. Slicer: **Open Web UI** (αποδοχή πιστοποιητικού, σύνδεση).
+
+**Raspberry Pi:** όλα εκτός από τον slicer (ο Bambu Studio για Linux βγαίνει μόνο για x86-64). Δεν χρειάζεται
+κωδικός για τον slicer εκεί.
 
 Στους H2D/H2S/H2C: USB stick + «Store Sent Files on External Storage» για το live layer view, και «LAN Only
 Liveview» για την κάμερα (δεν βάζει τον εκτυπωτή σε LAN only). Ο slicer είναι μόνο για το τοπικό δίκτυο.

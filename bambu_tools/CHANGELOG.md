@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+
+- **Raspberry Pi (aarch64)** support: everything except the slicer – ha-bambulab install, cards, "Bambu"
+  dashboard, Settings page, notification blueprint. Bambu Lab publishes Bambu Studio for Linux only for
+  x86-64, so the slicer stays amd64-only. The Pi build uses Home Assistant's own Python base image
+  (`Dockerfile.aarch64`); on amd64 nothing changes.
+- On a Pi the app ignores `start_slicer` and the Settings page hides the slicer options, with a short note why.
+
 ## 1.3.0
 
 - **Detail tiles are back** on every printer's page, like the first hand-made dashboard, in three groups:

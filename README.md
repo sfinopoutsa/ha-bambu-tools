@@ -9,14 +9,16 @@ One Home Assistant **app** for Bambu Lab printers:
   HMS/print errors, and buttons for the camera stream and the chamber light.
 - **Automatic "Bambu" dashboard** – finds every ha-bambulab printer (overview + one page per printer).
 - **Phone notifications** blueprint – finished, failed, paused, HMS, with the camera image.
-- **Bambu Studio in the browser** – the full slicer, on your home network.
+- **Bambu Studio in the browser** – the full slicer, on your home network (x86-64 machines only).
 - **Settings page** – a setup wizard with every setting in one place (printers, notifications, dashboard, slicer),
   plus a Settings part on every printer's page (its controls, checks and notifications).
 - **Detail tiles** on every printer's page – print, temperatures, nozzle, fans, Wi-Fi … – in groups that open and close.
 
 Greek and English UI (follows the Home Assistant language).
 
-> Unofficial project. Not affiliated with or endorsed by Bambu Lab. Home Assistant OS / Supervised, amd64.
+> Unofficial project. Not affiliated with or endorsed by Bambu Lab. Home Assistant OS / Supervised.
+> **amd64** (mini PC, NUC, …): everything. **aarch64** (Raspberry Pi 4/5, …): everything except the slicer –
+> Bambu Lab publishes Bambu Studio for Linux only for x86-64.
 
 ## Install
 
@@ -25,7 +27,7 @@ Greek and English UI (follows the Home Assistant language).
    [![Add repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fsfinopoutsa%2Fha-bambu-tools)
 
    or **Settings → Apps → App store → ⋮ → Repositories** → `https://github.com/sfinopoutsa/ha-bambu-tools`.
-2. Install **Bambu Tools**, set a slicer password in **Configuration**, **Start**.
+2. Install **Bambu Tools**, set a slicer password in **Configuration** (not needed on a Raspberry Pi), **Start**.
 3. Restart Home Assistant when the notification asks for it, then add the **Bambu Lab** integration.
 4. Open **Bambu** in the sidebar – the **Settings** tab (⚙) walks you through the rest.
 

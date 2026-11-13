@@ -15,6 +15,14 @@ PY
 )"
 fi
 
+# The slicer only exists in the amd64 image (Bambu Studio for Linux is x86-64 only). On a Raspberry Pi
+# (aarch64) the app installs the Home Assistant parts and then waits, whatever start_slicer says.
+if [ "${BT_START_SLICER}" = "true" ] && [ ! -x /opt/bambustudio/AppRun ]; then
+  echo "[bambu-tools] No slicer on this CPU ($(uname -m)): Bambu Studio for Linux exists only for x86-64."
+  echo "[bambu-tools] Δεν υπάρχει slicer σε αυτόν τον επεξεργαστή: ο Bambu Studio για Linux βγαίνει μόνο για x86-64."
+  BT_START_SLICER=false
+fi
+
 if [ "${BT_START_SLICER}" != "true" ]; then
   echo "[bambu-tools] Slicer turned off: only installing/updating the Home Assistant parts."
   python3 /opt/bambu-tools/install.py

@@ -33,6 +33,8 @@ const S = {
     o_dark_mode: 'Dark mode', o_install_ha_bambulab: 'Install ha-bambulab when missing', o_create_dashboard: 'Create the "Bambu" dashboard',
     save: 'Save settings', saved_restart: 'Saved. Restart the app to apply.', working: 'Working…', error: 'Error: {e}',
     checks: 'Checks', device_page: 'All printer settings', all_settings: 'Bambu Tools settings', no_printer: 'Printer "{p}" not found.',
+    s5_app: 'The Bambu Tools app',
+    no_slicer: 'The slicer (Bambu Studio) runs only on x86-64 computers, not on this one ({a}, e.g. Raspberry Pi). Everything else works.',
   },
   el: {
     title: 'Bambu Tools – ρυθμίσεις', progress: '{d} από {n} βήματα έτοιμα', refresh: 'Ανανέωση', admin: 'Η σελίδα θέλει δικαιώματα διαχειριστή.',
@@ -56,6 +58,8 @@ const S = {
     o_dark_mode: 'Σκούρο θέμα', o_install_ha_bambulab: 'Εγκατάσταση ha-bambulab αν λείπει', o_create_dashboard: 'Δημιουργία dashboard «Bambu»',
     save: 'Αποθήκευση ρυθμίσεων', saved_restart: 'Αποθηκεύτηκε. Κάνε Restart στο app για να ισχύσει.', working: 'Περίμενε…', error: 'Σφάλμα: {e}',
     checks: 'Έλεγχος', device_page: 'Όλες οι ρυθμίσεις του εκτυπωτή', all_settings: 'Ρυθμίσεις Bambu Tools', no_printer: 'Δεν βρέθηκε ο εκτυπωτής «{p}».',
+    s5_app: 'Το app Bambu Tools',
+    no_slicer: 'Ο slicer (Bambu Studio) τρέχει μόνο σε υπολογιστές x86-64, όχι σε αυτόν ({a}, π.χ. Raspberry Pi). Όλα τα υπόλοιπα δουλεύουν.',
   },
 };
 
@@ -138,6 +142,7 @@ class BambuSetupCard extends HTMLElement {
         const apps = await this._sv('/addons').catch(() => null);
         const app = (apps?.addons || []).find((x) => /(^|_)bambu_tools$/.test(x.slug));
         if (app) d.app = await this._sv(`/addons/${app.slug}/info`).catch(() => null);
+        d.hostArch = (await this._sv('/info').catch(() => null))?.arch || ''; // the slicer exists only for amd64
       }
       d.error = null;
     } catch (e) {
@@ -223,6 +228,18 @@ class BambuSetupCard extends HTMLElement {
     const f = this._form;
     const host = location.hostname;
     const chk = (k) => `<label class="chk"><input type="checkbox" data-opt="${k}"${f[k] ? ' checked' : ''}>${this._t(`o_${k}`)}</label>`;
+    if (!this._slicerHere(d)) {
+      return `
+      ${this._row(running, this._t('state'), `${this._t(running ? 'started' : 'stopped')} · ${this._t('version')} ${esc(a.version)}`,
+        `<button class="s" data-act="app" data-op="${running ? 'stop' : 'start'}">${this._t(running ? 'stop' : 'start')}</button>
+         ${running ? `<button class="s" data-act="app" data-op="restart">${this._t('restart')}</button>` : ''}
+         ${a.update_available ? `<button class="p" data-act="app-update">${this._t('update', { v: esc(a.version_latest) })}</button>` : ''}`, !running)}
+      <div class="hint">${this._t('no_slicer', { a: esc(d.hostArch) })}</div>
+      <div class="form grid">
+        ${chk('install_ha_bambulab')}${chk('create_dashboard')}
+        <div><button class="p" data-act="save-app">${this._t('save')}</button> <span class="msg">${esc(this._msg.app || '')}</span></div>
+      </div>`;
+    }
     return `
       ${this._row(running, this._t('state'), `${this._t(running ? 'started' : 'stopped')} · ${this._t('version')} ${esc(a.version)}`,
         `<button class="s" data-act="app" data-op="${running ? 'stop' : 'start'}">${this._t(running ? 'stop' : 'start')}</button>
@@ -237,6 +254,8 @@ class BambuSetupCard extends HTMLElement {
         <div><button class="p" data-act="save-app">${this._t('save')}</button> <span class="msg">${esc(this._msg.app || '')}</span></div>
       </div>`;
   }
+
+  _slicerHere(d) { return !d.hostArch || d.hostArch === 'amd64'; }
 
   _render() {
     const d = this._data;
@@ -281,7 +300,7 @@ class BambuSetupCard extends HTMLElement {
       ${step(2, s2, this._t('s2'), b2)}
       ${step(3, s3, this._t('s3'), b3)}
       ${step(4, s4, this._t('s4'), b4)}
-      ${step(5, s5, this._t('s5'), this._appBlock(d))}`);
+      ${step(5, s5, this._t(this._slicerHere(d) ? 's5' : 's5_app'), this._appBlock(d))}`);
   }
 
   // One printer only (on that printer's page): checks, notifications and links.

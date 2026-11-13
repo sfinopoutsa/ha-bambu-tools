@@ -1,0 +1,12 @@
+# Raspberry Pi and other 64-bit ARM machines (the Supervisor picks Dockerfile.<arch> when it exists).
+# Only the Home Assistant parts: the cards, the "Bambu" dashboard, the notification blueprint and the
+# ha-bambulab install. There is no slicer here: Bambu Lab publishes Bambu Studio for Linux only for x86-64,
+# so the linuxserver/bambustudio image used on amd64 (Dockerfile) does not exist for ARM.
+FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24-2026.10.3
+
+# ha-entry.sh, the installer, the frontend bundle and the blueprint (the slicer's files are left out).
+COPY rootfs/ /
+RUN rm -rf /defaults /custom-cont-init.d && \
+    chmod 755 /ha-entry.sh /opt/bambu-tools/install.py
+
+ENTRYPOINT ["/ha-entry.sh"]

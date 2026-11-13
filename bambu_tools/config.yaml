@@ -1,12 +1,15 @@
 name: Bambu Tools
-version: "1.3.0"
+version: "1.4.0"
 slug: bambu_tools
 description: >-
   Bambu Lab printers in Home Assistant: live 3D layer view, status cards, auto dashboard,
-  phone notifications and Bambu Studio in the browser. Installs ha-bambulab. Unofficial.
+  phone notifications and Bambu Studio in the browser (x86-64 only). Installs ha-bambulab. Unofficial.
 url: https://github.com/sfinopoutsa/ha-bambu-tools
+# amd64: everything, including the slicer (Dockerfile). aarch64 (Raspberry Pi): everything except the
+# slicer, which exists only for x86-64 (Dockerfile.aarch64).
 arch:
   - amd64
+  - aarch64
 init: false
 startup: application
 boot: manual

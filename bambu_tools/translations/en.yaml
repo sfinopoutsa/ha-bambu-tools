@@ -1,7 +1,7 @@
 configuration:
   start_slicer:
     name: Start the slicer
-    description: Run Bambu Studio in the browser (about 1 GB of RAM). Turn off to only install/update the Home Assistant parts.
+    description: Run Bambu Studio in the browser (about 1 GB of RAM; x86-64 only, not on a Raspberry Pi). Turn off to only install/update the Home Assistant parts.
   username:
     name: Slicer user name
     description: User name for the slicer web page.

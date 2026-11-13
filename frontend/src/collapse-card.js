@@ -3,10 +3,10 @@
 //   type: custom:bambu-collapse-card
 //   title: Print            # header text
 //   icon: mdi:progress-clock
-//   key: a1_rocket:print    # remembers open/closed in this browser (default: the title)
+//   key: my_a1:print    # remembers open/closed in this browser (default: the title)
 //   open: false             # first-time state
 //   flat: false             # true = child cards without their own frame
-//   summary: [sensor.a1_rocket_print_status, sensor.a1_rocket_print_progress]  # shown next to the title
+//   summary: [sensor.my_a1_print_status, sensor.my_a1_print_progress]  # shown next to the title
 //   cards: [ { type: tile, entity: … }, { type: tile, entity: …, full: true } ]  # full = whole width
 //
 // Child cards are created only when the group is opened for the first time.
