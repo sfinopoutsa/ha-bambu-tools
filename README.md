@@ -10,7 +10,8 @@ One Home Assistant **app** for Bambu Lab printers:
 - **Automatic "Bambu" dashboard** – finds every ha-bambulab printer (overview + one page per printer).
 - **Phone notifications** blueprint – finished, failed, paused, HMS, with the camera image.
 - **Bambu Studio in the browser** – the full slicer, on your home network.
-- **Settings page** – a setup wizard with every setting in one place (printers, notifications, dashboard, slicer).
+- **Settings page** – a setup wizard with every setting in one place (printers, notifications, dashboard, slicer),
+  plus a Settings part on every printer's page (its controls, checks and notifications).
 
 Greek and English UI (follows the Home Assistant language).
 

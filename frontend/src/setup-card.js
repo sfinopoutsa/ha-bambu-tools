@@ -1,6 +1,8 @@
 // bambu-setup-card: one page with every Bambu Tools setting, as a 5-step checklist/wizard.
 // 1 printers connection (ha-bambulab) · 2 per-printer checks · 3 phone notifications (blueprint)
 // · 4 dashboard language · 5 the app (slicer) options. Needs an administrator (uses Supervisor API).
+// With `printer: <prefix>` it shows only that printer: checks, notifications and links to the printer's
+// device page and to the full Settings page (used on each printer's page of the "Bambu" dashboard).
 import { findPrinters } from './discovery.js';
 import { lang } from './i18n.js';
 
@@ -30,6 +32,7 @@ const S = {
     o_start_slicer: 'Run the slicer (≈1 GB RAM)', o_username: 'Slicer user name', o_password: 'Slicer password', o_password_ph: 'unchanged',
     o_dark_mode: 'Dark mode', o_install_ha_bambulab: 'Install ha-bambulab when missing', o_create_dashboard: 'Create the "Bambu" dashboard',
     save: 'Save settings', saved_restart: 'Saved. Restart the app to apply.', working: 'Working…', error: 'Error: {e}',
+    checks: 'Checks', device_page: 'All printer settings', all_settings: 'Bambu Tools settings', no_printer: 'Printer "{p}" not found.',
   },
   el: {
     title: 'Bambu Tools – ρυθμίσεις', progress: '{d} από {n} βήματα έτοιμα', refresh: 'Ανανέωση', admin: 'Η σελίδα θέλει δικαιώματα διαχειριστή.',
@@ -52,6 +55,7 @@ const S = {
     o_start_slicer: 'Να τρέχει ο slicer (≈1 GB RAM)', o_username: 'Όνομα χρήστη slicer', o_password: 'Κωδικός slicer', o_password_ph: 'αμετάβλητος',
     o_dark_mode: 'Σκούρο θέμα', o_install_ha_bambulab: 'Εγκατάσταση ha-bambulab αν λείπει', o_create_dashboard: 'Δημιουργία dashboard «Bambu»',
     save: 'Αποθήκευση ρυθμίσεων', saved_restart: 'Αποθηκεύτηκε. Κάνε Restart στο app για να ισχύσει.', working: 'Περίμενε…', error: 'Σφάλμα: {e}',
+    checks: 'Έλεγχος', device_page: 'Όλες οι ρυθμίσεις του εκτυπωτή', all_settings: 'Ρυθμίσεις Bambu Tools', no_printer: 'Δεν βρέθηκε ο εκτυπωτής «{p}».',
   },
 };
 
@@ -69,12 +73,15 @@ class BambuSetupCard extends HTMLElement {
     this.shadowRoot.addEventListener('change', (ev) => this._onInput(ev));
   }
 
-  setConfig(config) { this._config = config || {}; }
+  setConfig(config) {
+    this._config = config || {};
+    this.toggleAttribute('printer', !!this._config.printer); // full width on a printer's page
+  }
 
   // Put back on the page (e.g. after switching views): show fresh data and enabled buttons.
   connectedCallback() { if (this._data) this._load(); }
 
-  getCardSize() { return 12; }
+  getCardSize() { return this._config?.printer ? 6 : 12; }
 
   getGridOptions() { return { columns: 'full' }; }
 
@@ -120,16 +127,18 @@ class BambuSetupCard extends HTMLElement {
         if (ub && String(ub.path).endsWith('bambu_print_notifications.yaml')) d.ours[ub.input?.print_status] = a;
         else if (!ub && JSON.stringify(a.cfg).includes('_print_status') && /notify/.test(JSON.stringify(a.cfg.actions || a.cfg.action || ''))) d.legacy.push(a);
       }
-      const dashes = await this._ws({ type: 'lovelace/dashboards/list' }).catch(() => []);
-      d.dash = dashes.find((x) => x.url_path === DASH) || null;
-      if (d.dash) {
-        const c = await this._ws({ type: 'lovelace/config', url_path: DASH }).catch(() => null);
-        d.dashLang = c?.strategy?.language || '';
-        d.dashStrategy = !!c?.strategy;
+      if (!this._config?.printer) { // dashboard and app: only on the full Settings page
+        const dashes = await this._ws({ type: 'lovelace/dashboards/list' }).catch(() => []);
+        d.dash = dashes.find((x) => x.url_path === DASH) || null;
+        if (d.dash) {
+          const c = await this._ws({ type: 'lovelace/config', url_path: DASH }).catch(() => null);
+          d.dashLang = c?.strategy?.language || '';
+          d.dashStrategy = !!c?.strategy;
+        }
+        const apps = await this._sv('/addons').catch(() => null);
+        const app = (apps?.addons || []).find((x) => /(^|_)bambu_tools$/.test(x.slug));
+        if (app) d.app = await this._sv(`/addons/${app.slug}/info`).catch(() => null);
       }
-      const apps = await this._sv('/addons').catch(() => null);
-      const app = (apps?.addons || []).find((x) => /(^|_)bambu_tools$/.test(x.slug));
-      if (app) d.app = await this._sv(`/addons/${app.slug}/info`).catch(() => null);
       d.error = null;
     } catch (e) {
       d.error = String(e.message || e);
@@ -153,7 +162,11 @@ class BambuSetupCard extends HTMLElement {
     return `<div class="row">${this._badge(ok, warn)}<span class="lbl">${esc(label)}</span><span class="txt">${text}</span>${extra}</div>`;
   }
 
-  _printerChecks(p) {
+  _box(p, inner, boxed) {
+    return boxed ? `<div class="printer"><div class="pname">${esc(p.name)}</div>${inner}</div>` : inner;
+  }
+
+  _printerChecks(p, boxed = true) {
     const st = (id) => this._hass.states[id];
     const isH2 = /(^|_)(h2|x1)/i.test(p.prefix) || /H2|X1/i.test(this._hass.devices?.[p.deviceId]?.model || '');
     const online = st(`binary_sensor.${p.prefix}_online`)?.state === 'on';
@@ -173,36 +186,34 @@ class BambuSetupCard extends HTMLElement {
     if (!gOk) gText = sd === 'missing' || sd === 'abnormal' ? this._t(isH2 ? 'gcode_h2' : 'gcode_sd') : this._t('gcode_wait');
     const dev = st(`binary_sensor.${p.prefix}_developer_lan_mode`)?.state === 'on';
     const fw = st(`binary_sensor.${p.prefix}_firmware`)?.state === 'on';
-    return `<div class="printer"><div class="pname">${esc(p.name)}</div>
+    return this._box(p, `
       ${this._row(online, this._t(online ? 'online' : 'offline'), '')}
       ${this._row(camOk, this._t('camera'), esc(camText), camExtra)}
       ${this._row(gOk, this._t('gcode'), esc(gText), '', !gOk && (sd === 'missing' || sd === 'abnormal'))}
       ${this._row(dev, this._t('control'), esc(this._t(dev ? 'control_ok' : 'control_ro')), '', false)}
-      ${this._row(!fw, this._t('fw'), esc(this._t(fw ? 'fw_up' : 'fw_ok')), '', fw)}
-    </div>`;
+      ${this._row(!fw, this._t('fw'), esc(this._t(fw ? 'fw_up' : 'fw_ok')), '', fw)}`, boxed);
   }
 
-  _notifyBlock(p, d) {
+  _notifyBlock(p, d, boxed = true) {
     const a = d.ours[p.statusEntity];
     if (a) {
       const on = a.state === 'on';
       const input = a.cfg.use_blueprint.input || {};
       const phone = d.phones.find((x) => x.id === input.notify_device)?.name || '';
       const evs = (input.notify_on || EVENTS).map((e) => this._t(`ev_${e}`)).join(', ');
-      return `<div class="printer"><div class="pname">${esc(p.name)}</div>
+      return this._box(p, `
         ${this._row(on, this._t(on ? 'enabled' : 'disabled'), esc(`${phone} · ${evs}`),
           `<button class="s" data-act="toggle" data-id="${esc(a.entity)}">${this._t(on ? 'disable' : 'turn_on')}</button>
-           <button class="s" data-act="nav" data-path="/config/automation/edit/${esc(a.id)}">${this._t('edit')}</button>`, false)}
-      </div>`;
+           <button class="s" data-act="nav" data-path="/config/automation/edit/${esc(a.id)}">${this._t('edit')}</button>`, false)}`, boxed);
     }
-    if (!d.phones.length) return `<div class="printer"><div class="pname">${esc(p.name)}</div><div class="hint">${this._t('no_phone')}</div></div>`;
+    if (!d.phones.length) return this._box(p, `<div class="hint">${this._t('no_phone')}</div>`, boxed);
     const f = this._form[`n_${p.prefix}`] || (this._form[`n_${p.prefix}`] = { phone: d.phones[0].id, events: [...EVENTS] });
     const opts = d.phones.map((x) => `<option value="${esc(x.id)}"${x.id === f.phone ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
     const checks = EVENTS.map((e) => `<label class="chk"><input type="checkbox" data-n="${esc(p.prefix)}" data-ev="${e}"${f.events.includes(e) ? ' checked' : ''}>${this._t(`ev_${e}`)}</label>`).join('');
-    return `<div class="printer"><div class="pname">${esc(p.name)}</div>
+    return this._box(p, `
       <div class="form"><label>${this._t('phone')} <select data-n="${esc(p.prefix)}" data-field="phone">${opts}</select></label>
       <div class="evs"><span>${this._t('events')}:</span> ${checks}</div>
-      <button class="p" data-act="notify" data-prefix="${esc(p.prefix)}">${this._t('enable')}</button></div></div>`;
+      <button class="p" data-act="notify" data-prefix="${esc(p.prefix)}">${this._t('enable')}</button></div>`, boxed);
   }
 
   _appBlock(d) {
@@ -232,6 +243,7 @@ class BambuSetupCard extends HTMLElement {
     if (!d) return;
     this._lastRender = Date.now();
     const h = this._hass;
+    if (this._config?.printer) { this._renderPrinter(d); return; }
     if (!d.admin) { this._html(`<div class="hint">${this._t('admin')}</div>`); return; }
     const printers = findPrinters(h);
     const s1 = d.loaded && (d.entries || []).length > 0;
@@ -272,6 +284,27 @@ class BambuSetupCard extends HTMLElement {
       ${step(5, s5, this._t('s5'), this._appBlock(d))}`);
   }
 
+  // One printer only (on that printer's page): checks, notifications and links.
+  _renderPrinter(d) {
+    this.style.display = d.admin ? '' : 'none'; // the checks and notifications need an administrator
+    if (!d.admin) return;
+    const prefix = this._config.printer;
+    const p = findPrinters(this._hass).find((x) => x.prefix === prefix);
+    if (!p) { this._html(`<div class="hint">${this._t('no_printer', { p: esc(prefix) })}</div>`); return; }
+    const sec = (title, body) => `<section><h2>${esc(title)}</h2><div class="body flat">${body}</div></section>`;
+    const legacy = d.legacy.filter((a) => a.state === 'on').map((a) => `<div class="warnbox">${this._t('legacy', { n: esc(a.name) })}
+      <button class="s" data-act="toggle" data-id="${esc(a.entity)}">${this._t('disable')}</button></div>`).join('');
+    this._html(`
+      ${d.error ? `<div class="warnbox">${this._t('error', { e: esc(d.error) })}</div>` : ''}
+      ${this._msg.global ? `<div class="info">${esc(this._msg.global)}</div>` : ''}
+      ${sec(this._t('checks'), this._printerChecks(p, false))}
+      ${sec(this._t('s3'), legacy + this._notifyBlock(p, d, false))}
+      <div class="links">
+        ${p.deviceId ? `<button class="s" data-act="nav" data-path="/config/devices/device/${esc(p.deviceId)}">${this._t('device_page')}</button>` : ''}
+        <button class="s" data-act="nav" data-path="/${DASH}/setup">${this._t('all_settings')}</button>
+      </div>`);
+  }
+
   _html(body) {
     this.shadowRoot.innerHTML = `
       <style>
@@ -288,6 +321,10 @@ class BambuSetupCard extends HTMLElement {
           background: color-mix(in srgb, var(--primary-color) 20%, transparent); color: var(--primary-color); flex: none; }
         section.done .num { background: var(--success-color, #43a047); color: #fff; }
         .body { padding-left: 34px; font-size: 14px; color: var(--primary-text-color); display: flex; flex-direction: column; gap: 8px; }
+        .body.flat { padding-left: 0; gap: 4px; }
+        :host([printer]) ha-card { max-width: none; }
+        section:first-of-type { border-top: none; padding-top: 0; }
+        .links { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--divider-color, #8883); }
         .printer { border: 1px solid var(--divider-color, #8883); border-radius: 10px; padding: 8px 12px; }
         .pname { font-weight: 500; margin-bottom: 4px; }
         .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; flex-wrap: wrap; font-size: 13.5px; }

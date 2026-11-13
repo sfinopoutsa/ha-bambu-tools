@@ -35,6 +35,11 @@ language: connect printers, check each printer (camera, G-code storage, Develope
 phone notifications with one click, pick the dashboard language, and change the app options – including the
 slicer password – without opening the app page. Needs an administrator.
 
+Each printer's page has a **Settings** part at the bottom: the printer's own controls (in cloud mode only the
+lights and the camera; with LAN Only + Developer Mode ha-bambulab adds many more), the checks and phone
+notifications for that printer, and buttons to the printer's device page and to the full Settings page.
+On a dashboard of your own: `type: custom:bambu-setup-card` with `printer: <entity prefix>`.
+
 ## Options
 
 | Option | Default | Meaning |
@@ -83,6 +88,7 @@ slicer password – without opening the app page. Needs an administrator.
 2. Αν σου το ζητήσει, **restart** του Home Assistant.
 3. Settings → Devices & services → **Bambu Lab** → σύνδεση εκτυπωτών.
 4. Sidebar → **Bambu** → καρτέλα **Ρυθμίσεις** (⚙): έλεγχος εκτυπωτών, ειδοποιήσεις με ένα κλικ, όλες οι επιλογές.
+   Κάθε εκτυπωτής έχει και δικές του ρυθμίσεις στο κάτω μέρος της σελίδας του.
 5. Slicer: **Open Web UI** (αποδοχή πιστοποιητικού, σύνδεση).
 
 Στους H2D/H2S/H2C: USB stick + «Store Sent Files on External Storage» για το live layer view, και «LAN Only

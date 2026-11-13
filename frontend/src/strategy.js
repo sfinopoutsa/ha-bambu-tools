@@ -24,6 +24,25 @@ const letterIcon = (name) => {
   return /[a-z]/.test(ch) ? `mdi:alpha-${ch}-box` : 'mdi:printer-3d';
 };
 
+// "Settings" part of a printer's page: the printer's own controls that ha-bambulab offers (few in cloud mode,
+// many with LAN Only + Developer Mode) and the setup card limited to this printer (checks, notifications,
+// links). Like the Settings page it follows the Home Assistant language.
+const CONTROL = /^(light|switch|select|number|button|fan)\./;
+function settingsCards(p, hass) {
+  const controls = Object.values(hass.entities || {})
+    .filter((e) => e.device_id === p.deviceId && CONTROL.test(e.entity_id) && !e.hidden
+      && hass.states[e.entity_id] && hass.states[e.entity_id].state !== 'unavailable')
+    .map((e) => e.entity_id)
+    .sort();
+  return [
+    { type: 'heading', heading: t(hass, 'setup'), heading_style: 'title', icon: 'mdi:cog' },
+    ...(controls.length ? [{
+      type: 'entities', title: t(hass, 'controls'), entities: controls, state_color: true, show_header_toggle: false, grid_options: { columns: 'full' },
+    }] : []),
+    { type: 'custom:bambu-setup-card', printer: p.prefix, grid_options: { columns: 'full' } },
+  ];
+}
+
 function printerView(p, hass, c, lng) {
   const side = [
     c.status(p),
@@ -47,6 +66,8 @@ function printerView(p, hass, c, lng) {
     sections: [
       { type: 'grid', column_span: 2, cards: [...c.camera(p, hass), c.layers(p, 10, 560)] },
       { type: 'grid', cards: side },
+      // last, full width: on a phone it comes after the status card, not before it
+      { type: 'grid', column_span: 3, cards: settingsCards(p, hass) },
     ],
   };
 }

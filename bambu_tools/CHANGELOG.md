@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- **Settings on every printer's page** of the "Bambu" dashboard (at the bottom, full width):
+  - the printer's own controls from ha-bambulab (lights and camera in cloud mode; more with LAN Only +
+    Developer Mode),
+  - the checks and the phone notifications for that printer,
+  - links to the printer's device page ("All printer settings") and to the full Settings page.
+- `bambu-setup-card` has a new `printer:` option that shows only one printer.
+
 ## 1.1.1
 
 - Settings page: after "Turn on notifications" the card waits until Home Assistant has loaded the new
