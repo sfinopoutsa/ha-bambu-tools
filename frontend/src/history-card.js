@@ -49,7 +49,7 @@ class BambuHistoryCard extends HTMLElement {
 
   _when(iso) {
     const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(this._locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(this._locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
   _month(key) {

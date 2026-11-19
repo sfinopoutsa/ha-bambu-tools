@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.1
+
+- First-layer notification: when the printer camera is turned off in Home Assistant, it is turned on for a
+  minute to take the picture and then off again (blueprint input *Camera for the first-layer picture*,
+  on by default). Notifications now run in parallel, so this minute holds nothing back.
+- Print history: the printer's calibration jobs (`…cali….gcode`) no longer count the previous print's filament.
+- Print history times in 24-hour format; group summaries skip an empty "None" value.
+
 ## 1.5.0
 
 - **Print history** on every printer's page (group "History"): this month and all-time prints, hours and

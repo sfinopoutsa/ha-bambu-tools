@@ -130,7 +130,7 @@ class BambuCollapseCard extends HTMLElement {
     if (!box || !h) return;
     const parts = (this._config.summary || []).map((id) => {
       const s = h.states[id];
-      if (!s || ['unknown', 'unavailable', ''].includes(s.state)) return null;
+      if (!s || ['unknown', 'unavailable', '', 'None', 'none'].includes(s.state)) return null;
       return h.formatEntityState ? h.formatEntityState(s) : s.state;
     }).filter(Boolean);
     const text = parts.join(' · ');

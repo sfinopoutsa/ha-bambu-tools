@@ -110,6 +110,16 @@ class HistoryTest(unittest.TestCase):
         self.assertEqual(a["jobs"][0]["file"], "b.3mf")  # newest first
         self.assertEqual(a["months"], [{"month": "2026-11", "prints": 2, "finished": 1, "failed": 1, "hours": 1.5, "grams": 10}])
 
+    def test_calibration_has_no_filament(self):
+        h = History()
+        h.update("a1", "running", at(0), snap(task="auto_filament_cali.gcode", grams=125.8))
+        job = h.update("a1", "finish", at(3), snap(task="auto_filament_cali.gcode", grams=125.8))
+        self.assertIsNone(job["grams"])
+        self.assertIsNone(job["meters"])
+        n = History().import_timeline("a1", [(at(0), "running"), (at(3), "finish")],
+                                      lambda t: snap(task="auto_filament_cali.gcode", grams=125.8))
+        self.assertEqual(n, 1)
+
     def test_parse_time(self):
         self.assertEqual(parse_time("2026-11-13T08:59:24+00:00"), datetime(2026, 11, 13, 8, 59, 24, tzinfo=timezone.utc))
         self.assertIsNone(parse_time("unknown"))

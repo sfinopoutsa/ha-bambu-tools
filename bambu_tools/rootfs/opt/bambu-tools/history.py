@@ -8,6 +8,7 @@ state) or idle (result "stopped", e.g. the printer was restarted). "offline"/"un
 do not end a job.
 """
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,6 +42,18 @@ def iso(t):
     return t.astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
+def is_calibration(file):
+    """The printer's own calibration jobs (e.g. auto_filament_cali.gcode): ha-bambulab keeps showing the weight
+    of the previous print during them, so that weight must not be counted."""
+    return bool(re.search(r"cali", file or "", re.I)) and str(file).lower().endswith(".gcode")
+
+
+def _filament(job):
+    if is_calibration(job["file"]):
+        job["grams"] = job["meters"] = None
+    return job
+
+
 class History:
     def __init__(self, path=None):
         self.path = Path(path) if path else None
@@ -50,6 +63,9 @@ class History:
                 self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
             except Exception:
                 pass
+        for p in self.data["printers"].values():  # rules added later apply to jobs already stored
+            for job in p.get("jobs", []):
+                _filament(job)
 
     def save(self):
         if not self.path:
@@ -113,6 +129,7 @@ class History:
             "meters": snap.get("meters"),
             "layers": snap.get("layers"),
         }
+        _filament(job)
         p["active"] = None
         last = p["jobs"][-1] if p["jobs"] else None
         if last and last["file"] == job["file"] and abs(
@@ -144,7 +161,7 @@ class History:
                     "grams": snap.get("grams"), "meters": snap.get("meters"), "layers": snap.get("layers"),
                 }
                 if (job["file"], job["start"][:16]) not in known:
-                    found.append(job)
+                    found.append(_filament(job))
                 start = None
         if found:
             p["jobs"] = sorted(p["jobs"] + found, key=lambda j: j["end"])[-KEEP_JOBS:]

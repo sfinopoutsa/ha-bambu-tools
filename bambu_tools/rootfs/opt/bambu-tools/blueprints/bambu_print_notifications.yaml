@@ -57,13 +57,24 @@ blueprint:
           min: 1
           max: 60
           unit_of_measurement: min
+    camera_for_picture:
+      name: Camera for the first-layer picture / Κάμερα για τη φωτογραφία του 1ου layer
+      description: >-
+        If the printer camera is turned off in Home Assistant, turn it on for a minute to take the
+        first-layer picture, then off again. · Αν η κάμερα είναι κλειστή στο Home Assistant, την ανοίγει
+        για ένα λεπτό για τη φωτογραφία του 1ου layer και μετά την ξανακλείνει.
+      default: true
+      selector:
+        boolean: {}
     dashboard_path:
       name: Page to open / Σελίδα που ανοίγει
       default: /bambu-tools/overview
       selector:
         text: {}
 
-mode: queued
+# parallel: the first-layer run waits a minute for the camera and must not hold back other notifications
+mode: parallel
+max: 10
 
 trigger_variables:
   status_entity: !input print_status
@@ -110,6 +121,9 @@ variables:
   progress: "{{ states('sensor.' ~ prefix ~ '_print_progress') }}"
   end_time: "{{ as_timestamp(states('sensor.' ~ prefix ~ '_end_time'), 0) | timestamp_custom('%H:%M') }}"
   st: "{{ trigger.to_state.state if trigger.id == 'status' else trigger.id }}"
+  camera_switch: "{{ 'switch.' ~ prefix ~ '_camera' }}"
+  camera_for_picture: !input camera_for_picture
+  borrow_camera: "{{ camera_for_picture and st == 'first_layer' and is_state(camera_switch, 'off') }}"
 
 conditions:
   - condition: template
@@ -120,6 +134,12 @@ conditions:
     value_template: "{{ st in notify_on }}"
 
 actions:
+  - if: "{{ borrow_camera }}"
+    then:
+      - action: switch.turn_on
+        target:
+          entity_id: "{{ camera_switch }}"
+      - delay: 8
   - domain: mobile_app
     type: notify
     device_id: !input notify_device
@@ -143,3 +163,10 @@ actions:
       image: "/api/camera_proxy/camera.{{ prefix }}_camera"
       push:
         interruption-level: "{{ 'time-sensitive' if st in ['failed', 'pause', 'hms'] else 'active' }}"
+  # give the phone time to fetch the picture, then put the camera back as it was
+  - if: "{{ borrow_camera }}"
+    then:
+      - delay: 60
+      - action: switch.turn_off
+        target:
+          entity_id: "{{ camera_switch }}"
