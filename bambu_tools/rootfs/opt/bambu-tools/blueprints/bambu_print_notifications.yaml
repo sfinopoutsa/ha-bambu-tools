@@ -81,17 +81,22 @@ triggers:
   - trigger: template
     value_template: "{{ is_state(hms_entity, 'on') }}"
     id: hms
-  # Fires once per print, when the printer moves on to layer 2.
+  # Fires once per print, when the printer moves on to layer 2. The upper bound keeps it from firing again
+  # later in the print (a pause/resume or a short cloud dropout also turns the template true again).
   - trigger: template
-    value_template: "{{ is_state(status_entity, 'running') and states(layer_entity) | int(0) >= 2 }}"
+    value_template: >-
+      {% set l = states(layer_entity) | int(0) %}
+      {{ is_state(status_entity, 'running') and 2 <= l <= 3 }}
     id: first_layer
-  # remaining_time is in hours in ha-bambulab; minutes and seconds are handled too.
+  # remaining_time is in hours in ha-bambulab; minutes and seconds are handled too. Only a 3-minute band
+  # under the limit counts, so a pause/resume or dropout closer to the end does not send it again.
   - trigger: template
     value_template: >-
       {% set u = state_attr(remaining_entity, 'unit_of_measurement') %}
       {% set v = states(remaining_entity) | float(-1) %}
       {% set m = v * 60 if u in ['h', None] else (v / 60 if u == 's' else v) %}
-      {{ is_state(status_entity, 'running') and 0 < m <= near_minutes | float(10) }}
+      {% set n = near_minutes | float(10) %}
+      {{ is_state(status_entity, 'running') and 0 < m <= n and m > n - 3 }}
     id: near_end
 
 variables:
