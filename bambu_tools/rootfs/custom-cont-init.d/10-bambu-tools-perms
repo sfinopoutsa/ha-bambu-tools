@@ -1,4 +1,11 @@
 #!/usr/bin/with-contenv bash
+# Bambu Studio 02.08.04.57 was a beta build and kept its settings in ~/.config/BambuStudioBeta; a full
+# release (02.09) uses ~/.config/BambuStudio. Copy them once, so presets and the Bambu login stay.
+# The old folder is left as it is (going back to the older image keeps working).
+if [ -d /config/.config/BambuStudioBeta ] && [ ! -e /config/.config/BambuStudio ]; then
+  cp -a /config/.config/BambuStudioBeta /config/.config/BambuStudio     && echo "[bambu-tools] slicer settings copied from .config/BambuStudioBeta to .config/BambuStudio"
+fi
+
 # Files copied into the app folder over Samba (presets, projects, a migrated profile) belong to root,
 # but Bambu Studio runs as the "abc" user and exits at start-up if it cannot write its config/log dirs.
 if command -v lsiown >/dev/null 2>&1; then

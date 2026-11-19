@@ -8,7 +8,7 @@ Everything for Bambu Lab printers in Home Assistant, in one app:
 | **Live layer view** – 3D G-code that follows the printer layer by layer | card `custom:bambu-layer-card` |
 | **Status card** – status, progress, finish time, temperatures, filament, camera/light buttons | card `custom:bambu-status-card` |
 | **Dashboard "Bambu"** – finds your printers by itself | sidebar → *Bambu* |
-| **Phone notifications** – finished / failed / paused / HMS, with camera | blueprint *Bambu Tools: print notifications* |
+| **Phone notifications** – finished / failed / paused / HMS / first layer / almost done, with camera | blueprint *Bambu Tools: print notifications* |
 | **Bambu Studio in the browser** | *Open Web UI* (port 3001) |
 
 > Unofficial project. Not affiliated with or endorsed by Bambu Lab.
@@ -41,6 +41,11 @@ language: connect printers, check each printer (camera, G-code storage, Develope
 phone notifications with one click, pick the dashboard language, and change the app options – including the
 slicer password – without opening the app page. Needs an administrator.
 
+Each printer's page also has a **History** group: prints this month and in total (hours, filament), the
+print running now and the last prints with their result. The app records it while it runs – turn on
+*Start with Home Assistant* on the Settings page (step 5) – and the first time it imports the prints Home
+Assistant still remembers (by default the last 10 days).
+
 Each printer's page also has three groups of **detail tiles** (*Print*, *Temperatures*, *Printer & filament*)
 that open and close; closed they show a short summary. Each browser remembers which groups were left open.
 
@@ -56,7 +61,8 @@ On a dashboard of your own: `type: custom:bambu-setup-card` with `printer: <enti
 | `start_slicer` | `true` | Run Bambu Studio (≈1 GB RAM, x86-64 only). Off = only install/update, then idle. |
 | `username` / `password` | `bambu` / – | Login for the slicer page. A password is required when the slicer is on. |
 | `dark_mode` | `true` | Dark theme in Bambu Studio. |
-| `install_ha_bambulab` | `true` | Install the latest ha-bambulab release if it is missing. An existing install (e.g. from HACS) is never touched. |
+| `install_ha_bambulab` | `true` | Install the latest ha-bambulab release if it is missing, and keep a copy the app installed up to date. A HACS install is never touched. |
+| `update_ha_bambulab` | `false` | Also update an ha-bambulab copy that was installed by hand (the Settings page turns this on when you press *Update*). The previous copy is kept in the app's storage. |
 | `create_dashboard` | `true` | Create the *Bambu* dashboard if it does not exist. Edit it freely afterwards – it is never overwritten. |
 
 ## Printer notes

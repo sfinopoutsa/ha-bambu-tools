@@ -14,6 +14,9 @@ configuration:
   install_ha_bambulab:
     name: Εγκατάσταση ha-bambulab
     description: Βάζει την πιο πρόσφατη έκδοση του ha-bambulab στο custom_components αν λείπει (θέλει ένα restart του Home Assistant).
+  update_ha_bambulab:
+    name: Ενημέρωση ha-bambulab
+    description: Ενημερώνει και ένα ha-bambulab που μπήκε με το χέρι (αυτό που έβαλε το app ενημερώνεται πάντα· εγκατάσταση από HACS δεν αγγίζεται ποτέ).
   create_dashboard:
     name: Dashboard «Bambu»
     description: Φτιάχνει dashboard που βρίσκει μόνο του τους εκτυπωτές (μόνο αν δεν υπάρχει ήδη).

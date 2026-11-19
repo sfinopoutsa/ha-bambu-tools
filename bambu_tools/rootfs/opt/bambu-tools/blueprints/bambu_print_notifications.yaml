@@ -2,11 +2,12 @@ blueprint:
   name: "Bambu Tools: print notifications"
   description: >-
     Sends a notification to your phone (Home Assistant Companion app) when a Bambu Lab print
-    finishes, fails or pauses, or when the printer reports an HMS message. The notification
-    shows the printer camera and opens the dashboard when tapped. Needs the ha-bambulab
-    integration. ·
-    Ειδοποίηση στο κινητό όταν μια εκτύπωση τελειώνει, αποτυγχάνει ή μπαίνει σε παύση,
-    ή όταν ο εκτυπωτής βγάζει μήνυμα HMS, με εικόνα από την κάμερα.
+    finishes, fails or pauses, when the first layer is done (with a camera picture, to check that it
+    sticks), a few minutes before the end, or when the printer reports an HMS message. Tapping it opens
+    the dashboard. Needs the ha-bambulab integration. ·
+    Ειδοποίηση στο κινητό όταν μια εκτύπωση τελειώνει, αποτυγχάνει ή μπαίνει σε παύση, όταν τελειώνει
+    το 1ο layer (με εικόνα από την κάμερα, για να δεις αν κόλλησε), λίγα λεπτά πριν το τέλος, ή όταν ο
+    εκτυπωτής βγάζει μήνυμα HMS.
   domain: automation
   author: Bambu Tools
   source_url: https://github.com/sfinopoutsa/ha-bambu-tools/blob/main/bambu_tools/rootfs/opt/bambu-tools/blueprints/bambu_print_notifications.yaml
@@ -30,7 +31,7 @@ blueprint:
             - integration: mobile_app
     notify_on:
       name: Notify on / Ειδοποίηση για
-      default: [finish, failed, pause, hms]
+      default: [finish, failed, pause, hms, first_layer]
       selector:
         select:
           multiple: true
@@ -43,6 +44,19 @@ blueprint:
               value: pause
             - label: HMS message / Μήνυμα HMS
               value: hms
+            - label: First layer done (camera picture) / Τέλος 1ου layer (με εικόνα)
+              value: first_layer
+            - label: A few minutes before the end / Λίγο πριν το τέλος
+              value: near_end
+    near_end_minutes:
+      name: Minutes before the end / Λεπτά πριν το τέλος
+      description: For "A few minutes before the end".
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
     dashboard_path:
       name: Page to open / Σελίδα που ανοίγει
       default: /bambu-tools/overview
@@ -53,7 +67,11 @@ mode: queued
 
 trigger_variables:
   status_entity: !input print_status
-  hms_entity: "{{ status_entity | replace('sensor.', 'binary_sensor.') | regex_replace('_print_status$', '_hms_errors') }}"
+  near_minutes: !input near_end_minutes
+  base: "{{ status_entity | regex_replace('_print_status$', '') }}"
+  hms_entity: "{{ base | replace('sensor.', 'binary_sensor.') ~ '_hms_errors' }}"
+  layer_entity: "{{ base ~ '_current_layer' }}"
+  remaining_entity: "{{ base ~ '_remaining_time' }}"
 
 triggers:
   - trigger: state
@@ -63,6 +81,18 @@ triggers:
   - trigger: template
     value_template: "{{ is_state(hms_entity, 'on') }}"
     id: hms
+  # Fires once per print, when the printer moves on to layer 2.
+  - trigger: template
+    value_template: "{{ is_state(status_entity, 'running') and states(layer_entity) | int(0) >= 2 }}"
+    id: first_layer
+  # remaining_time is in hours in ha-bambulab; minutes and seconds are handled too.
+  - trigger: template
+    value_template: >-
+      {% set u = state_attr(remaining_entity, 'unit_of_measurement') %}
+      {% set v = states(remaining_entity) | float(-1) %}
+      {% set m = v * 60 if u in ['h', None] else (v / 60 if u == 's' else v) %}
+      {{ is_state(status_entity, 'running') and 0 < m <= near_minutes | float(10) }}
+    id: near_end
 
 variables:
   notify_on: !input notify_on
@@ -73,12 +103,13 @@ variables:
   task: "{{ states('sensor.' ~ prefix ~ '_task_name') }}"
   layer: "{{ states('sensor.' ~ prefix ~ '_current_layer') }}/{{ states('sensor.' ~ prefix ~ '_total_layer_count') }}"
   progress: "{{ states('sensor.' ~ prefix ~ '_print_progress') }}"
-  st: "{{ trigger.to_state.state if trigger.id == 'status' else 'hms' }}"
+  end_time: "{{ as_timestamp(states('sensor.' ~ prefix ~ '_end_time'), 0) | timestamp_custom('%H:%M') }}"
+  st: "{{ trigger.to_state.state if trigger.id == 'status' else trigger.id }}"
 
 conditions:
   - condition: template
     value_template: >-
-      {{ trigger.id == 'hms' or (trigger.from_state is not none
+      {{ trigger.id != 'status' or (trigger.from_state is not none
          and trigger.from_state.state not in ['unavailable', 'unknown']) }}
   - condition: template
     value_template: "{{ st in notify_on }}"
@@ -91,10 +122,14 @@ actions:
       {% if st == 'hms' %}⚠️ {{ name }}: HMS
       {%- elif st == 'finish' %}✅ {{ name }}: finished / τελείωσε
       {%- elif st == 'failed' %}❌ {{ name }}: failed / απέτυχε
+      {%- elif st == 'first_layer' %}🟢 {{ name }}: first layer done / τέλος 1ου layer
+      {%- elif st == 'near_end' %}⏳ {{ name }}: almost done / σχεδόν έτοιμο
       {%- else %}⏸️ {{ name }}: paused / σε παύση{% endif %}
     message: >-
       {% if st == 'hms' %}{{ state_attr(hms_entity, 'Count') }} HMS · {{ task }}
       {%- elif st == 'finish' %}{{ task }}
+      {%- elif st == 'first_layer' %}Check that it sticks / Δες αν κόλλησε · {{ task }}
+      {%- elif st == 'near_end' %}{{ task }} · ends {{ end_time }} / τέλος {{ end_time }}
       {%- else %}{{ task }} · layer {{ layer }} ({{ progress }}%){% endif %}
     data:
       url: "{{ dashboard_path }}"

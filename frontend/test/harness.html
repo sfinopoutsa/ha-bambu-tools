@@ -22,7 +22,7 @@ import '../../bambu_tools/rootfs/opt/bambu-tools/www/bambu-tools.js';
 const sims = [
   { name: 'Printer A', prefix: 'printer_a', file: 'example-a.gcode', layers: 582, task: 'example A', start: 115, step: 1 },
   { name: 'Printer B', prefix: 'printer_b', file: 'example-b.gcode', layers: 110, task: 'example B', start: 1, step: 1 },
-  { name: 'H2S no file', prefix: 'h2s_nofile', file: 'unknown', layers: 136, task: 'toolbox', start: 71, step: 0 },
+  { name: 'H2S no file', prefix: 'h2s_nofile', file: 'unknown', layers: 136, task: 'toolbox', start: 71, step: 0, history: false },
 ];
 window.sims = [];
 for (const s of sims) {
@@ -34,7 +34,12 @@ for (const s of sims) {
   const status = document.createElement('bambu-status-card');
   status.setConfig({ printer: s.prefix, trays: [`sensor.${s.prefix}_tray_1`, `sensor.${s.prefix}_tray_2`, `sensor.${s.prefix}_ext`] });
   status.style.marginBottom = '12px';
-  wrap.append(ctl, status, card);
+  // print history (as published by the app's service) inside a group that opens and closes
+  const hist = document.createElement('bambu-collapse-card');
+  hist.setConfig({ title: 'History', icon: 'mdi:history', key: `harness:${s.prefix}:history`, flat: true, open: true,
+    summary: [`sensor.${s.prefix}_print_status`], cards: [{ type: 'custom:bambu-history-card', printer: s.prefix, full: true }] });
+  hist.style.marginTop = '12px';
+  wrap.append(ctl, status, card, hist);
   document.getElementById('grid').append(wrap);
   const state = { layer: s.start, status: 'running' };
   const mk = () => {
@@ -61,6 +66,16 @@ for (const s of sims) {
         [`sensor.${p}_tray_1`]: st('Bambu PETG Translucent', { color: '#d1d5dbFF', type: 'PETG', active: false, friendly_name: 'Tray 1' }),
         [`sensor.${p}_tray_2`]: st('eSUN PLA+', { color: '#101410FF', type: 'PLA', active: true, friendly_name: 'Tray 2' }),
         [`sensor.${p}_ext`]: st('Empty', { color: '#00000000', empty: true, active: false, friendly_name: 'External' }),
+        ...(s.history === false ? {} : { [`sensor.bambu_tools_history_${p}`]: st(3, {
+          jobs: [
+            { file: 'toolbox_print_in_place.stl', start: '2026-11-12T20:53:03+00:00', end: '2026-11-13T01:35:00+00:00', duration_s: 16917, result: 'finish', grams: 125.2, meters: 48.65, layers: '175/175' },
+            { file: 'clip_test_v2.3mf', start: '2026-11-11T10:00:00+00:00', end: '2026-11-11T10:20:00+00:00', duration_s: 1200, result: 'failed', grams: 3.1, meters: 1, layers: '12/80' },
+            { file: 'a_very_long_file_name_for_a_headphone_stand_with_connection_please_boost_me.3mf', start: '2026-10-30T08:00:00+00:00', end: '2026-10-30T15:00:00+00:00', duration_s: 25200, result: 'stopped', grams: null, meters: null, layers: null },
+          ],
+          months: [{ month: new Date().toISOString().slice(0, 7), prints: 2, finished: 1, failed: 1, hours: 5, grams: 128 }, { month: '2026-10', prints: 1, finished: 0, failed: 1, hours: 7, grams: 0 }],
+          total_prints: 3, total_finished: 1, total_hours: 12, total_grams: 1328,
+          active: state.status === 'running' ? { start: '2026-11-19T08:00:00+00:00', file: s.task } : null,
+        }) }),
       },
       formatEntityState: (o) => ({ printing: 'Printing', idle: 'Idle' }[o.state] || o.state),
       callService: (domain, service, data) => { const id = data.entity_id; if (id.startsWith('switch.')) state.cam = (state.cam ?? 'on') === 'on' ? 'off' : 'on'; else state.light = (state.light ?? 'on') === 'on' ? 'off' : 'on'; push(); },
@@ -71,7 +86,7 @@ for (const s of sims) {
       },
     };
   };
-  const push = () => { const hs = mk(); card.hass = hs; status.hass = hs; ctl.querySelector('.st').textContent = `layer ${state.layer} · ${state.status}`; };
+  const push = () => { const hs = mk(); card.hass = hs; status.hass = hs; hist.hass = hs; ctl.querySelector('.st').textContent = `layer ${state.layer} · ${state.status}`; };
   push();
   let timer = 0;
   ctl.addEventListener('click', (e) => {

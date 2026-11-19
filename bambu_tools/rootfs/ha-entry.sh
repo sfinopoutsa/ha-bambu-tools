@@ -1,7 +1,8 @@
 #!/bin/bash
 # Bambu Tools app entrypoint.
-# 1. Runs the installer (cards, dashboard, blueprint, ha-bambulab) in the background.
-# 2. Starts the browser slicer (linuxserver/bambustudio, Selkies) unless it is turned off.
+# 1. Runs the installer (cards, dashboard, blueprint, ha-bambulab) and then the service (print history,
+#    app status for the Settings page) for as long as the app runs.
+# 2. Starts the browser slicer (linuxserver/bambustudio, Selkies) when it is turned on and available.
 OPTS=/data/options.json
 if [ -f "$OPTS" ]; then
   eval "$(python3 - "$OPTS" <<'PY'
@@ -15,28 +16,41 @@ PY
 )"
 fi
 
-# The slicer only exists in the amd64 image (Bambu Studio for Linux is x86-64 only). On a Raspberry Pi
-# (aarch64) the app installs the Home Assistant parts and then waits, whatever start_slicer says.
-if [ "${BT_START_SLICER}" = "true" ] && [ ! -x /opt/bambustudio/AppRun ]; then
-  echo "[bambu-tools] No slicer on this CPU ($(uname -m)): Bambu Studio for Linux exists only for x86-64."
-  echo "[bambu-tools] Δεν υπάρχει slicer σε αυτόν τον επεξεργαστή: ο Bambu Studio για Linux βγαίνει μόνο για x86-64."
-  BT_START_SLICER=false
+# BT_SLICER tells the service (and so the Settings page) what happened to the slicer.
+export BT_SLICER=off
+if [ "${BT_START_SLICER}" = "true" ]; then
+  if [ ! -x /opt/bambustudio/AppRun ]; then
+    # The slicer only exists in the amd64 image (Bambu Studio for Linux is x86-64 only).
+    echo "[bambu-tools] No slicer on this CPU ($(uname -m)): Bambu Studio for Linux exists only for x86-64."
+    echo "[bambu-tools] Δεν υπάρχει slicer σε αυτόν τον επεξεργαστή: ο Bambu Studio για Linux βγαίνει μόνο για x86-64."
+    export BT_SLICER=unavailable
+  elif [ -z "${PASSWORD}" ]; then
+    echo "[bambu-tools] The slicer needs a password: set one in Configuration (or in Bambu → Settings). Running without it."
+    echo "[bambu-tools] Ο slicer θέλει κωδικό: βάλε έναν στο Configuration (ή στο Bambu → Ρυθμίσεις). Συνεχίζω χωρίς αυτόν."
+    export BT_SLICER=needs_password
+  else
+    export BT_SLICER=on
+  fi
 fi
 
-if [ "${BT_START_SLICER}" != "true" ]; then
-  echo "[bambu-tools] Slicer turned off: only installing/updating the Home Assistant parts."
+# Installer once, then the service; the service is restarted if it ever stops.
+run_tools() {
   python3 /opt/bambu-tools/install.py
-  echo "[bambu-tools] Nothing else to do. Stop the app or turn the slicer on in Configuration."
-  exec sleep infinity
+  while true; do
+    python3 /opt/bambu-tools/service.py
+    echo "[bambu-tools] service stopped; restarting in 30 s"
+    sleep 30
+  done
+}
+
+if [ "${BT_SLICER}" != "on" ]; then
+  [ "${BT_SLICER}" = "off" ] && echo "[bambu-tools] Slicer turned off: Home Assistant parts and print history only."
+  trap 'trap - TERM INT; kill 0; exit 0' TERM INT
+  run_tools &
+  wait
+  exit 0
 fi
 
-if [ -z "${PASSWORD}" ]; then
-  echo "[bambu-tools] Set a password in the app Configuration tab to use the slicer (or turn start_slicer off)."
-  echo "[bambu-tools] Βάλε κωδικό στην καρτέλα Configuration για τον slicer (ή κλείσε το start_slicer)."
-  python3 /opt/bambu-tools/install.py
-  exit 1
-fi
-
-python3 /opt/bambu-tools/install.py &
+run_tools &
 echo "[bambu-tools] Slicer user '${CUSTOM_USER}'. Open https://<home-assistant-ip>:3001"
 exec /init "$@"

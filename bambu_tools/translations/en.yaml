@@ -14,6 +14,9 @@ configuration:
   install_ha_bambulab:
     name: Install ha-bambulab
     description: Install the latest ha-bambulab release into custom_components if it is missing (needs one Home Assistant restart).
+  update_ha_bambulab:
+    name: Update ha-bambulab
+    description: Also update an ha-bambulab copy that was installed by hand (a copy installed by this app is always kept up to date; a HACS install is never touched).
   create_dashboard:
     name: Create the "Bambu" dashboard
     description: Create a dashboard that finds your printers automatically (only if it does not exist yet).

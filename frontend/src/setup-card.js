@@ -8,7 +8,8 @@ import { lang } from './i18n.js';
 
 const BLUEPRINT = 'bambu_tools/bambu_print_notifications.yaml';
 const DASH = 'bambu-tools';
-const EVENTS = ['finish', 'failed', 'pause', 'hms'];
+const EVENTS = ['finish', 'failed', 'pause', 'hms', 'first_layer', 'near_end'];
+const DEFAULT_EVENTS = ['finish', 'failed', 'pause', 'hms', 'first_layer'];
 
 const S = {
   en: {
@@ -34,6 +35,13 @@ const S = {
     save: 'Save settings', saved_restart: 'Saved. Restart the app to apply.', working: 'Working…', error: 'Error: {e}',
     checks: 'Checks', device_page: 'All printer settings', all_settings: 'Bambu Tools settings', no_printer: 'Printer "{p}" not found.',
     s5_app: 'The Bambu Tools app',
+    ev_first_layer: 'first layer (picture)', ev_near_end: 'near the end',
+    o_boot: 'Start with Home Assistant (needed for the print history)',
+    bl: 'ha-bambulab {v}', bl_ok: 'up to date', bl_new: 'version {v} is available', bl_update: 'Update', bl_hacs: 'Update (HACS)',
+    bl_by_app: 'installed by this app: it is updated when the app restarts',
+    bl_by_hand: 'installed by hand: "Update" lets the app keep it up to date from now on',
+    bl_after: 'ha-bambulab is being updated. When the notification appears, restart Home Assistant.',
+    slicer_pw: 'The slicer is turned on but has no password, so it is not running. Set a password below.',
     no_slicer: 'The slicer (Bambu Studio) runs only on x86-64 computers, not on this one ({a}, e.g. Raspberry Pi). Everything else works.',
   },
   el: {
@@ -59,6 +67,13 @@ const S = {
     save: 'Αποθήκευση ρυθμίσεων', saved_restart: 'Αποθηκεύτηκε. Κάνε Restart στο app για να ισχύσει.', working: 'Περίμενε…', error: 'Σφάλμα: {e}',
     checks: 'Έλεγχος', device_page: 'Όλες οι ρυθμίσεις του εκτυπωτή', all_settings: 'Ρυθμίσεις Bambu Tools', no_printer: 'Δεν βρέθηκε ο εκτυπωτής «{p}».',
     s5_app: 'Το app Bambu Tools',
+    ev_first_layer: '1ο layer (με εικόνα)', ev_near_end: 'λίγο πριν το τέλος',
+    o_boot: 'Ξεκινά μαζί με το Home Assistant (χρειάζεται για το ιστορικό εκτυπώσεων)',
+    bl: 'ha-bambulab {v}', bl_ok: 'ενημερωμένο', bl_new: 'υπάρχει η έκδοση {v}', bl_update: 'Ενημέρωση', bl_hacs: 'Ενημέρωση (HACS)',
+    bl_by_app: 'το έβαλε το app: ενημερώνεται όταν κάνει restart το app',
+    bl_by_hand: 'μπήκε με το χέρι: το «Ενημέρωση» αφήνει το app να το κρατά ενημερωμένο από εδώ και πέρα',
+    bl_after: 'Το ha-bambulab ενημερώνεται. Μόλις βγει η ειδοποίηση, κάνε restart στο Home Assistant.',
+    slicer_pw: 'Ο slicer είναι ανοιχτός αλλά δεν έχει κωδικό, οπότε δεν τρέχει. Βάλε κωδικό παρακάτω.',
     no_slicer: 'Ο slicer (Bambu Studio) τρέχει μόνο σε υπολογιστές x86-64, όχι σε αυτόν ({a}, π.χ. Raspberry Pi). Όλα τα υπόλοιπα δουλεύουν.',
   },
 };
@@ -212,7 +227,7 @@ class BambuSetupCard extends HTMLElement {
            <button class="s" data-act="nav" data-path="/config/automation/edit/${esc(a.id)}">${this._t('edit')}</button>`, false)}`, boxed);
     }
     if (!d.phones.length) return this._box(p, `<div class="hint">${this._t('no_phone')}</div>`, boxed);
-    const f = this._form[`n_${p.prefix}`] || (this._form[`n_${p.prefix}`] = { phone: d.phones[0].id, events: [...EVENTS] });
+    const f = this._form[`n_${p.prefix}`] || (this._form[`n_${p.prefix}`] = { phone: d.phones[0].id, events: [...DEFAULT_EVENTS] });
     const opts = d.phones.map((x) => `<option value="${esc(x.id)}"${x.id === f.phone ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
     const checks = EVENTS.map((e) => `<label class="chk"><input type="checkbox" data-n="${esc(p.prefix)}" data-ev="${e}"${f.events.includes(e) ? ' checked' : ''}>${this._t(`ev_${e}`)}</label>`).join('');
     return this._box(p, `
@@ -235,6 +250,7 @@ class BambuSetupCard extends HTMLElement {
          ${running ? `<button class="s" data-act="app" data-op="restart">${this._t('restart')}</button>` : ''}
          ${a.update_available ? `<button class="p" data-act="app-update">${this._t('update', { v: esc(a.version_latest) })}</button>` : ''}`, !running)}
       <div class="hint">${this._t('no_slicer', { a: esc(d.hostArch) })}</div>
+      ${this._bootToggle(a)}
       <div class="form grid">
         ${chk('install_ha_bambulab')}${chk('create_dashboard')}
         <div><button class="p" data-act="save-app">${this._t('save')}</button> <span class="msg">${esc(this._msg.app || '')}</span></div>
@@ -246,6 +262,8 @@ class BambuSetupCard extends HTMLElement {
          ${running ? `<button class="s" data-act="app" data-op="restart">${this._t('restart')}</button>` : ''}
          ${a.update_available ? `<button class="p" data-act="app-update">${this._t('update', { v: esc(a.version_latest) })}</button>` : ''}
          ${running && f.start_slicer ? `<a class="s" href="https://${esc(host)}:3001" target="_blank" rel="noopener">${this._t('open_slicer')}</a>` : ''}`, !running)}
+      ${this._status()?.slicer === 'needs_password' ? `<div class="warnbox">${this._t('slicer_pw')}</div>` : ''}
+      ${this._bootToggle(a)}
       <div class="form grid">
         ${chk('start_slicer')}
         <label>${this._t('o_username')} <input type="text" data-opt="username" value="${esc(f.username ?? '')}" autocomplete="off"></label>
@@ -256,6 +274,38 @@ class BambuSetupCard extends HTMLElement {
   }
 
   _slicerHere(d) { return !d.hostArch || d.hostArch === 'amd64'; }
+
+  // sensor.bambu_tools: published by the app's service (app version, ha-bambulab versions, slicer state)
+  _status() { return this._hass?.states['sensor.bambu_tools']?.attributes; }
+
+  _bootToggle(a) {
+    return `<label class="chk boot"><input type="checkbox" data-act-change="boot"${a.boot === 'auto' ? ' checked' : ''}>${this._t('o_boot')}</label>`;
+  }
+
+  // ha-bambulab version row (step 1): installed vs latest, and how it can be updated.
+  _bambulabRow() {
+    const s = this._status();
+    if (!s || !s.ha_bambulab_installed) return '';
+    const inst = String(s.ha_bambulab_installed);
+    const latest = s.ha_bambulab_latest ? String(s.ha_bambulab_latest) : '';
+    const num = (v) => v.split(/[^0-9]+/).filter(Boolean).map(Number);
+    const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+    if (!latest || !newer(latest, inst)) return this._row(true, this._t('bl', { v: inst }), esc(this._t('bl_ok')), '', false);
+    const hacs = Object.values(this._hass.states).find((st) => st.entity_id.startsWith('update.')
+      && /ha-bambulab|greghesp/i.test(`${st.attributes.release_url || ''} ${st.attributes.entity_picture || ''}`));
+    let btn = '';
+    let note = '';
+    if (s.ha_bambulab_managed_by === 'hacs' || hacs) {
+      btn = hacs ? `<button class="p" data-act="bl-hacs" data-id="${esc(hacs.entity_id)}">${this._t('bl_hacs')}</button>` : '';
+    } else if (s.ha_bambulab_managed_by === 'bambu_tools') {
+      note = ` · ${this._t('bl_by_app')}`;
+      btn = `<button class="p" data-act="bl-app">${this._t('bl_update')}</button>`;
+    } else {
+      note = ` · ${this._t('bl_by_hand')}`;
+      btn = `<button class="p" data-act="bl-app" data-adopt="1">${this._t('bl_update')}</button>`;
+    }
+    return this._row(false, this._t('bl', { v: inst }), esc(this._t('bl_new', { v: latest }) + note), btn, true);
+  }
 
   _render() {
     const d = this._data;
@@ -278,7 +328,8 @@ class BambuSetupCard extends HTMLElement {
     if (!d.loaded) b1 = `<div class="hint">${this._t('s1_missing')}</div><button class="p" data-act="restart-ha">${this._t('restart_ha')}</button>`;
     else if (!d.entries.length) b1 = `<div class="hint">${this._t('s1_none')}</div><button class="p" data-act="add-printer">${this._t('add')}</button>`;
     else b1 = `<div>${this._t('s1_ok', { n: d.entries.length })} ${d.entries.map((e) => `<span class="tag">${esc(e.title)}</span>`).join(' ')}</div>
-      <button class="s" data-act="add-printer">${this._t('add')}</button>`;
+      ${this._bambulabRow()}
+      <div><button class="s" data-act="add-printer">${this._t('add')}</button></div>`;
 
     const b2 = printers.length ? printers.map((p) => this._printerChecks(p)).join('') : `<div class="hint">${this._t('no_printers')}</div>`;
     const legacy = d.legacy.filter((a) => a.state === 'on').map((a) => `<div class="warnbox">${this._t('legacy', { n: esc(a.name) })}
@@ -364,6 +415,7 @@ class BambuSetupCard extends HTMLElement {
         input[type=text], input[type=password], select { font: inherit; font-size: 13.5px; padding: 5px 8px; border-radius: 6px;
           border: 1px solid var(--divider-color, #8885); background: var(--card-background-color); color: var(--primary-text-color); min-width: 140px; }
         .chk { gap: 6px; }
+        .boot { display: flex; align-items: center; gap: 6px; font-size: 13.5px; margin: 6px 0 2px; }
         button, a.s { font: inherit; font-size: 13px; border-radius: 16px; padding: 5px 12px; cursor: pointer; text-decoration: none; display: inline-block; }
         button.s, a.s { border: 1px solid var(--divider-color, #8885); background: none; color: var(--primary-text-color); }
         button.p { border: none; background: var(--primary-color); color: var(--text-primary-color, #fff); }
@@ -387,6 +439,8 @@ class BambuSetupCard extends HTMLElement {
       if (el.dataset.ev) f.events = el.checked ? [...new Set([...f.events, el.dataset.ev])] : f.events.filter((x) => x !== el.dataset.ev);
     } else if (el.dataset.actChange === 'dash-lang' && ev.type === 'change') {
       this._run(() => this._saveDashLang(el.value));
+    } else if (el.dataset.actChange === 'boot' && ev.type === 'change') {
+      this._run(() => this._sv(`/addons/${this._data.app.slug}/options`, 'post', { boot: el.checked ? 'auto' : 'manual' }));
     }
   }
 
@@ -405,6 +459,8 @@ class BambuSetupCard extends HTMLElement {
     if (a === 'app') return this._run(() => this._sv(`/addons/${this._data.app.slug}/${el.dataset.op}`, 'post'));
     if (a === 'app-update') return this._run(() => this._sv(`/store/addons/${this._data.app.slug}/update`, 'post'));
     if (a === 'save-app') return this._run(() => this._saveApp());
+    if (a === 'bl-hacs') return this._run(async () => { await h.callService('update', 'install', { entity_id: el.dataset.id }); this._msg.global = this._t('bl_after'); });
+    if (a === 'bl-app') return this._run(() => this._updateBambulab(!!el.dataset.adopt));
     return null;
   }
 
@@ -440,6 +496,19 @@ class BambuSetupCard extends HTMLElement {
       .some((s) => s.entity_id.startsWith('automation.') && s.attributes.id === id);
     for (let i = 0; i < 40 && this.isConnected && !exists(); i++) await new Promise((r) => setTimeout(r, 250));
     this._msg.global = '';
+  }
+
+  // ha-bambulab copy not from HACS: the app updates it when it starts (a hand-made copy only with the
+  // update_ha_bambulab option, which this turns on). Only that option is changed.
+  async _updateBambulab(adopt) {
+    const slug = this._data.app?.slug;
+    if (!slug) return;
+    if (adopt) {
+      const fresh = await this._sv(`/addons/${slug}/info`);
+      await this._sv(`/addons/${slug}/options`, 'post', { options: { ...fresh.options, update_ha_bambulab: true } });
+    }
+    await this._sv(`/addons/${slug}/restart`, 'post');
+    this._msg.global = this._t('bl_after');
   }
 
   async _saveDashLang(language) {

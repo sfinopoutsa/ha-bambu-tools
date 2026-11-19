@@ -1,5 +1,5 @@
 name: Bambu Tools
-version: "1.4.0"
+version: "1.5.0"
 slug: bambu_tools
 description: >-
   Bambu Lab printers in Home Assistant: live 3D layer view, status cards, auto dashboard,
@@ -46,6 +46,7 @@ options:
   password: ""
   dark_mode: true
   install_ha_bambulab: true
+  update_ha_bambulab: false
   create_dashboard: true
 schema:
   start_slicer: bool
@@ -53,4 +54,5 @@ schema:
   password: password?
   dark_mode: bool
   install_ha_bambulab: bool
+  update_ha_bambulab: bool
   create_dashboard: bool

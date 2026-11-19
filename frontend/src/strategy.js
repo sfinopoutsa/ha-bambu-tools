@@ -60,6 +60,18 @@ function detailSections(p, hass, lng) {
   }).filter(Boolean);
 }
 
+// Print history (recorded by the app's service), full width, opens and closes like the detail groups.
+function historySection(p, lng) {
+  return {
+    type: 'grid',
+    column_span: 3,
+    cards: [{
+      type: 'custom:bambu-collapse-card', key: `${p.prefix}:history`, title: t(lng, 'd_history'), icon: 'mdi:history', flat: true,
+      cards: [{ type: 'custom:bambu-history-card', printer: p.prefix, ...(typeof lng === 'string' ? { language: lng } : {}), full: true }],
+    }],
+  };
+}
+
 // "Settings" part of a printer's page: the printer's own controls that ha-bambulab offers (few in cloud mode,
 // many with LAN Only + Developer Mode) and the setup card limited to this printer (checks, notifications,
 // links). Like the Settings page it follows the Home Assistant language.
@@ -103,6 +115,7 @@ function printerView(p, hass, c, lng) {
       { type: 'grid', column_span: 2, cards: [...c.camera(p, hass), c.layers(p, 10, 560)] },
       { type: 'grid', cards: side },
       ...detailSections(p, hass, lng),
+      historySection(p, lng),
       // last, full width: on a phone it comes after the status card, not before it
       { type: 'grid', column_span: 3, cards: settingsCards(p, hass) },
     ],

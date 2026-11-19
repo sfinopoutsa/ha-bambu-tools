@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "ci-**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests and bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: G-code parser test
+        working-directory: frontend
+        run: npm test
+      - name: The committed bundle matches the sources
+        working-directory: frontend
+        run: |
+          npm run build
+          git diff --exit-code -- ../bambu_tools/rootfs/opt/bambu-tools/www/bambu-tools.js \
+            || (echo "::error::Run 'npm run build' in frontend/ and commit the bundle" && exit 1)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Print history tests
+        run: python -m unittest discover -s tests -v
+      - name: Python and shell syntax
+        run: |
+          python -m py_compile bambu_tools/rootfs/opt/bambu-tools/*.py
+          bash -n bambu_tools/rootfs/ha-entry.sh
+          bash -n bambu_tools/rootfs/custom-cont-init.d/10-bambu-tools-perms
+
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            platform: linux/arm64
+            dockerfile: Dockerfile.aarch64
+          - arch: amd64
+            platform: linux/amd64
+            dockerfile: Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      # The same build the Home Assistant Supervisor runs (buildx, BUILD_ARCH/BUILD_VERSION, per-arch Dockerfile).
+      - uses: docker/build-push-action@v6
+        with:
+          context: bambu_tools
+          file: bambu_tools/${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_ARCH=${{ matrix.arch }}
+            BUILD_VERSION=ci
+          load: true
+          tags: bambu-tools:${{ matrix.arch }}
+      - name: Start the app once (no Home Assistant around)
+        run: |
+          mkdir -p /tmp/app/data /tmp/app/ha
+          # slicer requested but (on a Pi) not available / (on amd64) no password: either way the app must
+          # fall back to the Home Assistant parts, copy its files and keep running
+          echo '{"start_slicer": true, "username": "u", "password": "", "dark_mode": true,
+                 "install_ha_bambulab": false, "update_ha_bambulab": false, "create_dashboard": false}' > /tmp/app/data/options.json
+          set +e
+          timeout 60 docker run --rm --platform ${{ matrix.platform }} \
+            -v /tmp/app/data:/data -v /tmp/app/ha:/homeassistant bambu-tools:${{ matrix.arch }} > out.txt 2>&1
+          code=$?
+          set -e
+          cat out.txt
+          echo "exit code: $code (124 = still running after 60 s, as it should)"
+          test "$code" = 124
+          if [ "${{ matrix.arch }}" = aarch64 ]; then grep -q "No slicer on this CPU" out.txt; else grep -q "needs a password" out.txt; fi
+          grep -q "frontend updated" out.txt
+          test -s /tmp/app/ha/www/bambu-tools/bambu-tools.js
+          test -s /tmp/app/ha/blueprints/automation/bambu_tools/bambu_print_notifications.yaml
+          docker run --rm --platform ${{ matrix.platform }} --entrypoint python3 bambu-tools:${{ matrix.arch }} --version

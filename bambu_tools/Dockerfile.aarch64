@@ -4,6 +4,10 @@
 # so the linuxserver/bambustudio image used on amd64 (Dockerfile) does not exist for ARM.
 FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24-2026.10.3
 
+# The app version (passed by the Supervisor), shown on the Settings page.
+ARG BUILD_VERSION=dev
+ENV BAMBU_TOOLS_VERSION=${BUILD_VERSION}
+
 # ha-entry.sh, the installer, the frontend bundle and the blueprint (the slicer's files are left out).
 COPY rootfs/ /
 RUN rm -rf /defaults /custom-cont-init.d && \

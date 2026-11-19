@@ -1,6 +1,10 @@
-# Bambu Studio 02.08.04.57 in the browser (linuxserver/bambustudio, Selkies), plus the Bambu Tools installer.
-ARG BUILD_FROM=lscr.io/linuxserver/bambustudio:v02.08.04.57-ls176
+# Bambu Studio 02.09.01.70 in the browser (linuxserver/bambustudio, Selkies), plus the Bambu Tools installer.
+ARG BUILD_FROM=lscr.io/linuxserver/bambustudio:v02.09.01.70-ls179
 FROM ${BUILD_FROM}
+
+# The app version (passed by the Supervisor), shown on the Settings page.
+ARG BUILD_VERSION=dev
+ENV BAMBU_TOOLS_VERSION=${BUILD_VERSION}
 
 # Inside a Home Assistant app, bubblewrap cannot build its sandbox (mounts are denied), but it fails
 # in a way glycin (GTK's image loader) does not recognise, so every icon load fails and GTK aborts

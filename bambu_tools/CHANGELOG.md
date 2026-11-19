@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.5.0
+
+- **Print history** on every printer's page (group "History"): this month and all-time prints, hours and
+  filament, the print running now, the last prints (result, date, time, grams) and a monthly table. The app
+  records it while it runs (new option on the Settings page: *Start with Home Assistant*) and, the first
+  time, imports the prints Home Assistant still remembers. Entity: `sensor.bambu_tools_history_<printer>`.
+- **New notifications**: *first layer done* (with the camera picture, to check that it sticks) and *a few
+  minutes before the end* (minutes configurable). New notification set-ups get the first one by default.
+- **ha-bambulab updates**: the Settings page shows the installed and the latest version and updates it –
+  through HACS when HACS manages it, otherwise through the app. A copy the app installed is kept up to date
+  automatically; a hand-made copy only after you allow it (option `update_ha_bambulab`). The previous copy
+  is kept as a backup.
+- **Bambu Studio 02.09.01.70** (was 02.08.04.57 beta). The slicer settings are copied from the beta folder
+  (`.config/BambuStudioBeta`) to the one the release uses (`.config/BambuStudio`) the first time.
+- When the slicer is on but has no password, the app no longer stops: it runs without the slicer and the
+  Settings page says why.
+- The "ready" notification appears only after the first install, not after every update.
+- Status entity `sensor.bambu_tools` (app version, ha-bambulab versions, slicer state).
+- Tests and CI: G-code parser and print-history tests; every push builds the amd64 and the Raspberry Pi
+  (aarch64) image and starts the Pi one once.
+
 ## 1.4.0
 
 - **Raspberry Pi (aarch64)** support: everything except the slicer – ha-bambulab install, cards, "Bambu"
