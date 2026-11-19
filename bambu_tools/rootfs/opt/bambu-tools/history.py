@@ -47,7 +47,7 @@ class History:
         self.data = {"version": 1, "printers": {}, "backfilled": []}
         if self.path and self.path.exists():
             try:
-                self.data.update(json.loads(self.path.read_text()))
+                self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
             except Exception:
                 pass
 
@@ -55,7 +55,7 @@ class History:
         if not self.path:
             return
         tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.data, ensure_ascii=False))
+        tmp.write_text(json.dumps(self.data, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self.path)
 
     def printer(self, prefix, name=None):

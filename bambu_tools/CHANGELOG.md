@@ -9,7 +9,7 @@
 - **New notifications**: *first layer done* (with the camera picture, to check that it sticks) and *a few
   minutes before the end* (minutes configurable). New notification set-ups get the first one by default.
 - **ha-bambulab updates**: the Settings page shows the installed and the latest version and updates it –
-  through HACS when HACS manages it, otherwise through the app. A copy the app installed is kept up to date
+  through the store when Home Assistant's marketplace or HACS manages it, otherwise through the app. A copy the app installed is kept up to date
   automatically; a hand-made copy only after you allow it (option `update_ha_bambulab`). The previous copy
   is kept as a backup.
 - **Bambu Studio 02.09.01.70** (was 02.08.04.57 beta). The slicer settings are copied from the beta folder

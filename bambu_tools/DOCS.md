@@ -61,7 +61,7 @@ On a dashboard of your own: `type: custom:bambu-setup-card` with `printer: <enti
 | `start_slicer` | `true` | Run Bambu Studio (≈1 GB RAM, x86-64 only). Off = only install/update, then idle. |
 | `username` / `password` | `bambu` / – | Login for the slicer page. A password is required when the slicer is on. |
 | `dark_mode` | `true` | Dark theme in Bambu Studio. |
-| `install_ha_bambulab` | `true` | Install the latest ha-bambulab release if it is missing, and keep a copy the app installed up to date. A HACS install is never touched. |
+| `install_ha_bambulab` | `true` | Install the latest ha-bambulab release if it is missing, and keep a copy the app installed up to date. A copy managed by the marketplace or HACS is never touched. |
 | `update_ha_bambulab` | `false` | Also update an ha-bambulab copy that was installed by hand (the Settings page turns this on when you press *Update*). The previous copy is kept in the app's storage. |
 | `create_dashboard` | `true` | Create the *Bambu* dashboard if it does not exist. Edit it freely afterwards – it is never overwritten. |
 

@@ -37,7 +37,7 @@ const S = {
     s5_app: 'The Bambu Tools app',
     ev_first_layer: 'first layer (picture)', ev_near_end: 'near the end',
     o_boot: 'Start with Home Assistant (needed for the print history)',
-    bl: 'ha-bambulab {v}', bl_ok: 'up to date', bl_new: 'version {v} is available', bl_update: 'Update', bl_hacs: 'Update (HACS)',
+    bl: 'ha-bambulab {v}', bl_ok: 'up to date', bl_new: 'version {v} is available', bl_update: 'Update', bl_hacs: 'Update from the store',
     bl_by_app: 'installed by this app: it is updated when the app restarts',
     bl_by_hand: 'installed by hand: "Update" lets the app keep it up to date from now on',
     bl_after: 'ha-bambulab is being updated. When the notification appears, restart Home Assistant.',
@@ -69,7 +69,7 @@ const S = {
     s5_app: 'Το app Bambu Tools',
     ev_first_layer: '1ο layer (με εικόνα)', ev_near_end: 'λίγο πριν το τέλος',
     o_boot: 'Ξεκινά μαζί με το Home Assistant (χρειάζεται για το ιστορικό εκτυπώσεων)',
-    bl: 'ha-bambulab {v}', bl_ok: 'ενημερωμένο', bl_new: 'υπάρχει η έκδοση {v}', bl_update: 'Ενημέρωση', bl_hacs: 'Ενημέρωση (HACS)',
+    bl: 'ha-bambulab {v}', bl_ok: 'ενημερωμένο', bl_new: 'υπάρχει η έκδοση {v}', bl_update: 'Ενημέρωση', bl_hacs: 'Ενημέρωση από το store',
     bl_by_app: 'το έβαλε το app: ενημερώνεται όταν κάνει restart το app',
     bl_by_hand: 'μπήκε με το χέρι: το «Ενημέρωση» αφήνει το app να το κρατά ενημερωμένο από εδώ και πέρα',
     bl_after: 'Το ha-bambulab ενημερώνεται. Μόλις βγει η ειδοποίηση, κάνε restart στο Home Assistant.',
@@ -295,7 +295,7 @@ class BambuSetupCard extends HTMLElement {
       && /ha-bambulab|greghesp/i.test(`${st.attributes.release_url || ''} ${st.attributes.entity_picture || ''}`));
     let btn = '';
     let note = '';
-    if (s.ha_bambulab_managed_by === 'hacs' || hacs) {
+    if (['marketplace', 'hacs'].includes(s.ha_bambulab_managed_by) || hacs) {
       btn = hacs ? `<button class="p" data-act="bl-hacs" data-id="${esc(hacs.entity_id)}">${this._t('bl_hacs')}</button>` : '';
     } else if (s.ha_bambulab_managed_by === 'bambu_tools') {
       note = ` · ${this._t('bl_by_app')}`;
