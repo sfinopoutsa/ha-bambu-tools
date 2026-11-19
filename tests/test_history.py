@@ -39,14 +39,33 @@ class HistoryTest(unittest.TestCase):
 
     def test_start_time_sensor_is_used(self):
         h = History()
-        h.update("h2s", "running", at(40), snap(start=at(10)))  # app started late; printer knows the start
+        h.reconcile("h2s", "running", at(40), snap(start=at(10)))  # app started late; printer knows the start
         job = h.update("h2s", "failed", at(70), snap())
         self.assertEqual(job["result"], "failed")
         self.assertEqual(job["duration_s"], 60 * 60)
 
+    def test_live_start_ignores_previous_prints_start(self):
+        # at "prepare" the start_time sensor still holds the previous print's start (same MQTT message,
+        # status changed first); the real start arrives with "running"
+        h = History()
+        h.update("a1", "running", at(-600), snap(start=at(-600)))
+        h.update("a1", "finish", at(-480), snap())
+        h.update("a1", "prepare", at(0), snap(start=at(-600)))
+        self.assertEqual(h.printer("a1")["active"]["start"], "2026-11-10T08:00:00+00:00")
+        h.update("a1", "running", at(1), snap(start=T0 - timedelta(seconds=5)))
+        self.assertEqual(h.printer("a1")["active"]["start"], "2026-11-10T07:59:55+00:00")
+        job = h.update("a1", "finish", at(60), snap())
+        self.assertEqual(job["duration_s"], 60 * 60 + 5)
+
+    def test_live_start_too_old_is_ignored(self):
+        h = History()
+        h.update("h2s", "running", at(40), snap(start=at(10)))  # 30 min old: not trusted live
+        job = h.update("h2s", "finish", at(70), snap())
+        self.assertEqual(job["duration_s"], 30 * 60)
+
     def test_implausible_start_time_is_ignored(self):
         h = History()
-        h.update("h2s", "running", at(0), snap(start=at(-60 * 24 * 10)))  # 10 days old: a previous job
+        h.reconcile("h2s", "running", at(0), snap(start=at(-60 * 24 * 10)))  # 10 days old: a previous job
         job = h.update("h2s", "finish", at(30), snap())
         self.assertEqual(job["duration_s"], 30 * 60)
 

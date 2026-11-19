@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.2
+
+- Print history: a print's start time comes from the printer only when it really belongs to this print.
+  At "prepare" the printer still reports the previous print's start for a moment; the real one is taken
+  as soon as it arrives.
+- Docs: keep the app running for the history; the first-layer picture option.
+
 ## 1.5.1
 
 - First-layer notification: when the printer camera is turned off in Home Assistant, it is turned on for a

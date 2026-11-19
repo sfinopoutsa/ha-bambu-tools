@@ -31,8 +31,9 @@ page and the notifications work the same. You don't need a slicer password there
    notifications with one click.
 5. Slicer: **Open Web UI** → accept the self-signed certificate → log in with the user name and password.
 
-The app only needs to run once to install or update the Home Assistant parts. Start it again when you want
-the slicer, and stop it afterwards on small machines.
+Keep the app running (Settings page: *Start with Home Assistant*): besides installing and updating the Home
+Assistant parts it records the print history. With the slicer off it needs only a few MB of RAM; the
+slicer itself takes about 1 GB, so on small machines turn it on only when you need it.
 
 ## Settings page
 
@@ -40,6 +41,10 @@ The **Bambu** dashboard has a **Settings** tab (⚙) with everything in one plac
 language: connect printers, check each printer (camera, G-code storage, Developer Mode, firmware), turn on
 phone notifications with one click, pick the dashboard language, and change the app options – including the
 slicer password – without opening the app page. Needs an administrator.
+
+The notification blueprint can also send *first layer done* with a camera picture: if the printer camera is
+turned off in Home Assistant, it is turned on for a minute for the picture and then off again (input
+*Camera for the first-layer picture*), and *a few minutes before the end*.
 
 Each printer's page also has a **History** group: prints this month and in total (hours, filament), the
 print running now and the last prints with their result. The app records it while it runs – turn on

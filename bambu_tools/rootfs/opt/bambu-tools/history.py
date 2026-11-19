@@ -81,16 +81,27 @@ class History:
         return p
 
     # ---------------- events ----------------
-    def update(self, prefix, status, now, snap, name=None):
-        """Feed the current print status. Returns the job that just ended, or None."""
+    def update(self, prefix, status, now, snap, name=None, max_age=timedelta(minutes=15)):
+        """Feed the current print status. Returns the job that just ended, or None.
+
+        The printer's start_time sensor is used only when it fits: not older than max_age (live: the status
+        and start_time change in the same MQTT message, status first, so at "prepare" the sensor can still
+        hold the previous print's start) and after the end of the previous job."""
         p = self.printer(prefix, name)
         active = p.get("active")
+        st = snap.get("start_time")
         if status in ACTIVE:
             if not active:
-                start = snap.get("start_time") if self._plausible_start(snap.get("start_time"), now) else now
+                start = st if self._plausible_start(p, st, now, max_age) else now
                 p["active"] = {"start": iso(start), "file": snap.get("task") or ""}
-            elif snap.get("task") and not active.get("file"):
-                active["file"] = snap["task"]
+            else:
+                if snap.get("task") and not active.get("file"):
+                    active["file"] = snap["task"]
+                # the real start arrives a moment later (e.g. at "running"): take it when it is close
+                cur = parse_time(active["start"])
+                if st and cur and st != cur and abs((st - cur).total_seconds()) <= 1800 \
+                        and self._plausible_start(p, st, now, max_age + timedelta(minutes=30)):
+                    active["start"] = iso(st)
             return None
         if status in ENDED or status == "idle":
             result = status if status in ENDED else "stopped"
@@ -104,7 +115,8 @@ class History:
         p = self.printer(prefix, name)
         active = p.get("active")
         if status in ACTIVE:
-            return self.update(prefix, status, now, snap, name)
+            # the app (re)started in the middle of a print: the printer's start may be hours ago
+            return self.update(prefix, status, now, snap, name, max_age=timedelta(days=4))
         if active and (status in ENDED or status == "idle"):
             end = snap.get("end_time")
             start = parse_time(active["start"])
@@ -114,8 +126,11 @@ class History:
         return None
 
     @staticmethod
-    def _plausible_start(t, now):
-        return bool(t) and now - timedelta(days=4) <= t <= now + timedelta(minutes=5)
+    def _plausible_start(p, t, now, max_age):
+        if not t or not (now - max_age <= t <= now + timedelta(minutes=5)):
+            return False
+        last = p["jobs"][-1] if p["jobs"] else None
+        return not last or t >= parse_time(last["end"])
 
     def _close(self, p, active, result, end, snap):
         start = parse_time(active["start"]) or end
