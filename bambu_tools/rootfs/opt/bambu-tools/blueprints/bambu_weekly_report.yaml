@@ -73,7 +73,7 @@ actions:
     device_id: !input notify_device
     title: "📊 3D prints · {{ w.from }}"
     message: >-
-      {{ w.prints }} prints / εκτυπώσεις ({{ w.finished }} ✓ {{ w.failed }} ✗) · {{ w.hours }} h · {{ w.grams | round(0) }} g
+      {{ w.prints }} prints / εκτυπώσεις ({{ w.finished }} ✓ {{ w.failed }} ✗) · {{ w.hours }} h · {{ w.grams | round(0) }} g{% if w.cost is defined and w.cost is not none %} · {{ '%.2f' | format(w.cost) }} {{ state_attr('sensor.bambu_tools', 'currency') or '' }}{% endif %}
       {%- for name, p in (w.printers or {}).items() if p.prints > 0 %}
       {{ name }}: {{ p.prints }} · {{ p.hours }} h · {{ p.grams | round(0) }} g{% endfor %}
     data:

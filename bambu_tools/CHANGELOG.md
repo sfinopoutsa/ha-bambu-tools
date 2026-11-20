@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+
+- **Cost of every print**: filament price per kg for each material and, optionally, the electricity price and
+  each printer's average power (an estimate), on the Settings page (*Print cost*). The history shows the
+  cost of each print (filament and electricity on hover) and per month, week and in total; the weekly
+  report and `history.csv` include it. Prices apply to older prints too; an unknown part is left out, never
+  counted as 0.
+- The Settings page sends prices to the app through a Home Assistant event (`bambu_tools_command`); the app
+  accepts them from administrators only.
+
 ## 1.6.1
 
 - Failed prints: the printer resets the progress to 0 a few seconds after a failure; the history now keeps

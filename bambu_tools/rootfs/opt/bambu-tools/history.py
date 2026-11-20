@@ -263,8 +263,10 @@ class History:
                "grams": round(sum((j.get("grams") or 0) for j in jobs))}
         out["failed"] = out["prints"] - out["finished"]
         if cost:
-            costs = [cost(j) for j in jobs]
-            out["cost"] = round(sum(c for c in costs if c is not None), 2)
+            # a cost function returns a number or {"total": …}; prints without a known cost are left out
+            values = [c.get("total") if isinstance(c, dict) else c for c in (cost(j) for j in jobs)]
+            known = [v for v in values if v is not None]
+            out["cost"] = round(sum(known), 2) if known else None
         return out
 
     def attributes(self, prefix, tz=None, now=None, cost=None):

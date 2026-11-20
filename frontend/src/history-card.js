@@ -52,6 +52,16 @@ class BambuHistoryCard extends HTMLElement {
     return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(this._locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
+  _money(v) {
+    if (v == null) return '';
+    try { return new Intl.NumberFormat(this._locale(), { style: 'currency', currency: this._cur || 'EUR' }).format(v); } catch (e) { return `${v.toFixed(2)}`; }
+  }
+
+  _costTip(c) {
+    return [c.filament != null ? `${this._t('h_c_fil')} ${this._money(c.filament)}` : '', c.energy != null ? `${this._t('h_c_kwh')} ${this._money(c.energy)}` : '']
+      .filter(Boolean).join(' · ');
+  }
+
   // filament of a print: colour dot + name (material)
   _fil(f) {
     if (!f || !f.name) return '';
@@ -90,9 +100,10 @@ class BambuHistoryCard extends HTMLElement {
       const months = a.months || [];
       const thisMonth = new Date().toISOString().slice(0, 7);
       const cur = a.this_month || months.find((m) => m.month === thisMonth) || { prints: 0, hours: 0, grams: 0 };
+      this._cur = a.currency;
       const stat = (label, m) => `<div class="stat"><div class="lbl">${esc(label)}</div>
         <div class="val">${esc(this._t('h_prints', { n: m.prints }))}</div>
-        <div class="sub">${esc(this._dur((m.hours || 0) * 3600))} · ${esc(this._grams(m.grams || 0))}</div></div>`;
+        <div class="sub">${esc(this._dur((m.hours || 0) * 3600))} · ${esc(this._grams(m.grams || 0))}${m.cost != null ? ` · ${esc(this._money(m.cost))}` : ''}</div></div>`;
       const active = a.active ? `<div class="now"><span class="dot"></span>${esc(this._t('h_now'))}: <b>${esc(a.active.file || '—')}</b>
         ${this._fil(a.active.filament)}
         <span class="muted">${esc(this._t('h_since', { t: this._when(a.active.start) }))}</span>
@@ -107,12 +118,13 @@ class BambuHistoryCard extends HTMLElement {
           <span class="file">${esc(j.file || '—')}<span class="sub2">${this._fil(j.filament)}${at ? `<span class="${cls}">${esc(this._t(`h_${j.result}`) + at)}</span>` : ''}</span></span>
           <span class="muted when">${esc(this._when(j.end))}</span>
           <span class="dur">${esc(this._dur(j.duration_s))}</span>
-          <span class="g">${esc(this._grams(j.grams))}</span></div>`;
+          <span class="g">${esc(this._grams(j.grams))}${j.cost?.total != null
+            ? `<span class="money" title="${esc(this._costTip(j.cost))}">${esc(this._money(j.cost.total))}</span>` : ''}</span></div>`;
       }).join('');
       const monthRows = months.slice(0, 6).map((m) => `<tr><td>${esc(this._month(m.month))}</td><td>${m.prints}</td>
         <td>${m.finished}/${m.prints}</td><td>${esc(this._dur(m.hours * 3600))}</td><td>${esc(this._grams(m.grams))}</td></tr>`).join('');
       body = `
-        <div class="stats">${stat(this._t('h_month'), cur)}${stat(this._t('h_total'), { prints: a.total_prints || 0, hours: a.total_hours || 0, grams: a.total_grams || 0 })}</div>
+        <div class="stats">${stat(this._t('h_month'), cur)}${stat(this._t('h_total'), { prints: a.total_prints || 0, hours: a.total_hours || 0, grams: a.total_grams || 0, cost: a.total_cost })}</div>
         ${active}
         ${rows ? `<div class="jobs">${rows}</div>` : `<div class="hint">${esc(this._t('h_empty'))}</div>`}
         ${monthRows ? `<details><summary>${esc(this._t('h_months'))}</summary><table>
@@ -149,7 +161,8 @@ class BambuHistoryCard extends HTMLElement {
         .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .now .ph { margin-left: auto; }
         .when, .dur, .g { white-space: nowrap; font-size: 12.5px; }
-        .g { min-width: 48px; text-align: right; }
+        .g { min-width: 48px; text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
+        .money { font-size: 11.5px; color: var(--secondary-text-color); }
         @media (max-width: 480px) { .job { grid-template-columns: 22px 44px minmax(0, 1fr) auto auto; } .when { display: none; } }
         details { margin-top: 10px; font-size: 13px; color: var(--primary-text-color); }
         summary { cursor: pointer; color: var(--secondary-text-color); }

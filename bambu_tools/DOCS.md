@@ -55,6 +55,11 @@ also written to `/media/bambu_tools/history.csv` (UTF-8, `;` separated) for Exce
 The **weekly report** (Settings page, step 3) sends the week's prints, hours and filament to your phone,
 Sunday 20:00 by default (change day and time with *Edit*).
 
+**Print cost** (Settings page): set the filament price per kg for each material (the list shows the
+materials your prints used) and, if you want, the electricity price and each printer's average power while
+printing. The history then shows the cost of every print – filament (grams used × price of the print's
+material) plus electricity (an estimate: power × print time, pauses included, × price per kWh).
+
 Each printer's page also has a **History** group: prints this month and in total (hours, filament), the
 print running now and the last prints with their result. The app records it while it runs – turn on
 *Start with Home Assistant* on the Settings page (step 5) – and the first time it imports the prints Home

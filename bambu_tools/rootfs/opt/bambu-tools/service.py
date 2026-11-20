@@ -9,8 +9,11 @@
   /media/bambu_tools/<printer>/ (Home Assistant's media folder). A camera that is turned off in Home
   Assistant is turned on for the picture and off again.
 - history.csv in the same folder (all prints, for Excel).
+- Cost of every print (settings.py): filament price per material and an electricity estimate, set on the
+  Settings page. The page fires the event `bambu_tools_command`; commands are accepted from administrators
+  only and answered by republishing sensor.bambu_tools with the new settings and their revision.
 - App status: publishes sensor.bambu_tools (app version, ha-bambulab installed/latest/managed by, slicer,
-  weekly figures), which the Settings page and the weekly report read.
+  weekly figures, settings), which the Settings page and the weekly report read.
 
 Entities set through the REST API disappear when Home Assistant restarts; they are published again as soon
 as the service reconnects. Only the Python standard library is used.
@@ -28,6 +31,7 @@ from pathlib import Path
 
 import install
 from history import ACTIVE, ENDED, History, iso, number, parse_time
+from settings import Settings
 
 try:
     from zoneinfo import ZoneInfo
@@ -35,6 +39,8 @@ except ImportError:  # pragma: no cover
     ZoneInfo = None
 
 HISTORY_FILE = Path("/data/history.json")
+SETTINGS_FILE = Path("/data/settings.json")
+COMMAND_EVENT = "bambu_tools_command"
 MEDIA = Path("/media/bambu_tools")
 MEDIA_ID = "media-source://media_source/local/bambu_tools"
 STATUS_ENTITY = "sensor.bambu_tools"
@@ -252,7 +258,7 @@ def prune_photos():
 
 
 # ---------------- CSV ----------------
-def write_csv(hist, decimal=","):
+def write_csv(hist, decimal=",", settings=None):
     """All prints of all printers, for Excel: UTF-8 with BOM, ';' between columns."""
     def num(v, digits=2):
         if v is None:
@@ -265,14 +271,17 @@ def write_csv(hist, decimal=","):
     out = io.StringIO()
     w = csv.writer(out, delimiter=";", lineterminator="\r\n")
     w.writerow(["printer", "file", "start", "end", "minutes", "result", "progress_%", "grams", "meters",
-                "grams_planned", "filament", "material", "color", "photo_end"])
-    for _, name, j in hist.all_jobs():
+                "grams_planned", "filament", "material", "color", "cost_filament", "cost_energy", "cost_total",
+                "photo_end"])
+    for prefix, name, j in hist.all_jobs():
         f = j.get("filament") or {}
+        c = settings.job_cost(prefix, j) if settings else {}
         start, end = parse_time(j["start"]), parse_time(j["end"])
         w.writerow([name, j["file"], start.astimezone(Ctx.tz).strftime("%Y-%m-%d %H:%M"), end.astimezone(Ctx.tz).strftime("%Y-%m-%d %H:%M"),
                     round(j["duration_s"] / 60), j["result"], num(j.get("progress"), 0), num(j.get("grams")),
                     num(j.get("meters")), num(j.get("grams_planned")), f.get("name") or "", f.get("type") or "",
-                    f.get("color") or "", (j.get("photos") or {}).get("end") or ""])
+                    f.get("color") or "", num(c.get("filament")), num(c.get("energy")), num(c.get("total")),
+                    (j.get("photos") or {}).get("end") or ""])
     MEDIA.mkdir(parents=True, exist_ok=True)
     tmp = MEDIA / "history.csv.tmp"
     tmp.write_text("﻿" + out.getvalue(), encoding="utf-8", newline="")
@@ -283,12 +292,15 @@ def write_csv(hist, decimal=","):
 class Ctx:
     tz = None
     decimal = ","
+    currency = None
+    settings = Settings(SETTINGS_FILE)
+    settings_error = None   # (rev, message) of the last rejected command
 
 
 def publish_history(hist, prefix, name):
-    attrs = hist.attributes(prefix, tz=Ctx.tz)
+    attrs = hist.attributes(prefix, tz=Ctx.tz, cost=lambda j: Ctx.settings.job_cost(prefix, j))
     attrs.update({"friendly_name": f"{name} print history", "icon": "mdi:history", "unit_of_measurement": "prints",
-                  "media": MEDIA_ID, "csv": f"{MEDIA_ID}/history.csv"})
+                  "media": MEDIA_ID, "csv": f"{MEDIA_ID}/history.csv", "currency": Ctx.currency})
     set_state(f"sensor.bambu_tools_history_{prefix}", str(attrs["total_prints"]), attrs)
 
 
@@ -306,9 +318,15 @@ def publish_status(hist, printers):
     version = os.environ.get("BAMBU_TOOLS_VERSION") or "dev"
     weeks = {}
     for key in ("this_week", "last_week"):
-        per = {printers[p]["name"]: hist.attributes(p, tz=Ctx.tz)[key] for p in printers}
+        per = {printers[p]["name"]: hist.attributes(p, tz=Ctx.tz, cost=lambda j, p=p: Ctx.settings.job_cost(p, j))[key]
+               for p in printers}
         tot = {k: round(sum(v[k] for v in per.values()), 1) for k in ("prints", "finished", "failed", "hours", "grams")}
+        costs = [v["cost"] for v in per.values() if v.get("cost") is not None]
+        tot["cost"] = round(sum(costs), 2) if costs else None
         weeks[key] = {"from": next(iter(per.values()))["from"] if per else None, **tot, "printers": per}
+    # materials seen in the history and in the trays now, for the price form
+    seen = {(j.get("filament") or {}).get("type") for _, _, j in hist.all_jobs()}
+    seen |= {((p.get("active") or {}).get("filament") or {}).get("type") for p in hist.data["printers"].values()}
     set_state(STATUS_ENTITY, version, {
         "friendly_name": "Bambu Tools", "icon": "mdi:printer-3d",
         "app_version": version,
@@ -319,6 +337,12 @@ def publish_status(hist, printers):
         "arch": platform.machine(),
         "printers": sorted(printers),
         "csv": f"{MEDIA_ID}/history.csv",
+        "currency": Ctx.currency,
+        "settings": Ctx.settings.public(),
+        "settings_rev": Ctx.settings.data.get("rev"),
+        "settings_error": Ctx.settings_error,
+        "materials_seen": sorted(m for m in seen if m),
+        "printer_names": {p: printers[p]["name"] for p in printers},
         **weeks,
     })
 
@@ -328,7 +352,7 @@ def publish_all(hist, printers):
         publish_history(hist, prefix, info["name"])
     publish_status(hist, printers)
     try:
-        write_csv(hist, Ctx.decimal)
+        write_csv(hist, Ctx.decimal, Ctx.settings)
     except Exception as e:
         log(f"could not write history.csv: {e}")
 
@@ -339,6 +363,7 @@ def setup_locale(ws):
     except Exception:
         return
     tzname = cfg.get("time_zone")
+    Ctx.currency = cfg.get("currency") or None
     try:
         Ctx.tz = ZoneInfo(tzname) if ZoneInfo and tzname else None
     except Exception:
@@ -347,6 +372,43 @@ def setup_locale(ws):
     # Excel in English locales expects a decimal point; most others a comma
     lang = str(cfg.get("language") or "en")
     Ctx.decimal = "." if lang.startswith("en") and cfg.get("country") in (None, "US", "GB", "IE", "AU", "CA", "NZ") else ","
+
+
+# ---------------- commands from the Settings page ----------------
+_admins = {}
+
+
+def is_admin(ws, user_id):
+    """Is this Home Assistant user an administrator? (the user list is read again for an unknown id)"""
+    if not user_id:
+        return False
+    if user_id not in _admins:
+        try:
+            for u in ws.call(type="config/auth/list"):
+                _admins[u["id"]] = bool(u.get("is_owner")) or "system-admin" in (u.get("group_ids") or [])
+        except Exception as e:
+            log(f"could not read the users: {e}")
+            return False
+    return _admins.get(user_id, False)
+
+
+def handle_command(ws, hist, printers, event):
+    data = event.get("data") or {}
+    user = (event.get("context") or {}).get("user_id")
+    rev = data.get("rev")
+    if not is_admin(ws, user):
+        log("ignored a settings command from a non-administrator")
+        Ctx.settings_error = {"rev": rev, "error": "administrator rights are needed"}
+    else:
+        try:
+            Ctx.settings.apply(data)
+            Ctx.settings.save()
+            Ctx.settings_error = None
+            log(f"settings changed ({data.get('cmd')})")
+        except ValueError as e:
+            Ctx.settings_error = {"rev": rev, "error": str(e)}
+            log(f"settings command rejected: {e}")
+    publish_all(hist, printers)
 
 
 # ---------------- the session ----------------
@@ -374,6 +436,8 @@ def session(ws, hist):
     if by_status:
         ws.call(type="subscribe_trigger", trigger={"trigger": "state", "entity_id": sorted(by_status) + sorted(by_layer)})
         sub_id = ws.n
+    ws.call(type="subscribe_events", event_type=COMMAND_EVENT)
+    cmd_id = ws.n
     pending = []   # [(when, prefix, kind, job start)] pictures to take
     first_done = set()  # job starts whose first-layer picture was scheduled
     last_rx, ping_at, last_check = time.time(), None, time.time()
@@ -396,6 +460,8 @@ def session(ws, hist):
             last_rx = time.time()
             if m.get("type") == "pong":
                 ping_at = None
+            elif m.get("type") == "event" and m.get("id") == cmd_id:
+                handle_command(ws, hist, printers, m.get("event") or {})
             elif m.get("type") == "event" and m.get("id") == sub_id:
                 trig = ((m.get("event") or {}).get("variables") or {}).get("trigger") or {}
                 to = trig.get("to_state") or {}

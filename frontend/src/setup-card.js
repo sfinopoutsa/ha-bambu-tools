@@ -40,6 +40,10 @@ const S = {
     ev_first_layer: 'first layer (picture)', ev_near_end: 'near the end',
     o_boot: 'Start with Home Assistant (needed for the print history)',
     weekly: 'Weekly report', weekly_off: 'a summary of the week on Sunday at 20:00', weekly_desc: '{d} {t} · {p}',
+    cost: 'Print cost', cost_hint: 'Prices are used for the cost of every print in the history (also older ones). Leave a field empty if you do not want it counted.',
+    cost_mat: 'Filament price per kg ({c})', cost_new: 'Other material', cost_kwh: 'Electricity price per kWh ({c})',
+    cost_w: 'Average power while printing (W) – an estimate, e.g. about 100 W for an A1', cost_save: 'Save prices',
+    cost_saving: 'Saving…', cost_saved: 'Saved', cost_noapp: 'Needs the Bambu Tools app 1.7 or newer, running.', cost_err: 'Not saved: {e}',
     bl: 'ha-bambulab {v}', bl_ok: 'up to date', bl_new: 'version {v} is available', bl_update: 'Update', bl_hacs: 'Update from the store',
     bl_by_app: 'installed by this app: it is updated when the app restarts',
     bl_by_hand: 'installed by hand: "Update" lets the app keep it up to date from now on',
@@ -73,6 +77,10 @@ const S = {
     ev_first_layer: '1ο layer (με εικόνα)', ev_near_end: 'λίγο πριν το τέλος',
     o_boot: 'Ξεκινά μαζί με το Home Assistant (χρειάζεται για το ιστορικό εκτυπώσεων)',
     weekly: 'Εβδομαδιαία αναφορά', weekly_off: 'σύνοψη της εβδομάδας την Κυριακή στις 20:00', weekly_desc: '{d} {t} · {p}',
+    cost: 'Κόστος εκτυπώσεων', cost_hint: 'Οι τιμές χρησιμοποιούνται για το κόστος κάθε εκτύπωσης στο ιστορικό (και των παλιών). Άφησε ένα πεδίο κενό αν δεν θέλεις να μετρά.',
+    cost_mat: 'Τιμή νήματος ανά κιλό ({c})', cost_new: 'Άλλο υλικό', cost_kwh: 'Τιμή ρεύματος ανά kWh ({c})',
+    cost_w: 'Μέση ισχύς όσο τυπώνει (W) – εκτίμηση, π.χ. περίπου 100 W για ένα A1', cost_save: 'Αποθήκευση τιμών',
+    cost_saving: 'Αποθήκευση…', cost_saved: 'Αποθηκεύτηκε', cost_noapp: 'Θέλει το app Bambu Tools 1.7 ή νεότερο, σε λειτουργία.', cost_err: 'Δεν αποθηκεύτηκε: {e}',
     bl: 'ha-bambulab {v}', bl_ok: 'ενημερωμένο', bl_new: 'υπάρχει η έκδοση {v}', bl_update: 'Ενημέρωση', bl_hacs: 'Ενημέρωση από το store',
     bl_by_app: 'το έβαλε το app: ενημερώνεται όταν κάνει restart το app',
     bl_by_hand: 'μπήκε με το χέρι: το «Ενημέρωση» αφήνει το app να το κρατά ενημερωμένο από εδώ και πέρα',
@@ -241,6 +249,60 @@ class BambuSetupCard extends HTMLElement {
       <button class="p" data-act="notify" data-prefix="${esc(p.prefix)}">${this._t('enable')}</button></div>`, boxed);
   }
 
+  // ---------- print cost: prices kept by the app's service (settings.py), changed through an event ----------
+  _costSet() {
+    const st = this._status()?.settings;
+    return st && (Object.keys(st.materials || {}).length || st.price_kwh != null);
+  }
+
+  _costForm() {
+    const s = this._status();
+    if (!this._cost || !this._costDirty) {
+      const st = s?.settings || {};
+      this._cost = { materials: { ...(st.materials || {}) }, price_kwh: st.price_kwh ?? '', watts: { ...(st.watts || {}) }, newName: '', newPrice: '' };
+      for (const m of s?.materials_seen || []) if (!(m in this._cost.materials)) this._cost.materials[m] = '';
+    }
+    return this._cost;
+  }
+
+  _costBlock() {
+    const s = this._status();
+    if (!s || !s.settings) return `<div class="hint">${this._t('cost_noapp')}</div>`;
+    const f = this._costForm();
+    const c = esc(s.currency || '€');
+    const num = (key, val, ph = '') => `<input type="number" min="0" step="0.01" data-cost="${esc(key)}" value="${esc(val ?? '')}" placeholder="${esc(ph)}">`;
+    const mats = Object.keys(f.materials).sort().map((m) => `<label>${esc(m)} ${num(`mat:${m}`, f.materials[m])}</label>`).join('');
+    const names = s.printer_names || {};
+    const watts = Object.keys(names).map((p) => `<label>${esc(names[p])} ${num(`w:${p}`, f.watts[p], '100')}</label>`).join('');
+    return `<div class="hint">${esc(this._t('cost_hint'))}</div>
+      <div class="lbl">${esc(this._t('cost_mat', { c }))}</div>
+      <div class="form">${mats}
+        <label>${esc(this._t('cost_new'))} <input type="text" data-cost="new-name" value="${esc(f.newName)}" placeholder="PETG" size="8">
+          ${num('new-price', f.newPrice)}</label></div>
+      <div class="form"><label>${esc(this._t('cost_kwh', { c }))} ${num('kwh', f.price_kwh, '0.20')}</label></div>
+      <div class="lbl">${esc(this._t('cost_w'))}</div>
+      <div class="form">${watts}</div>
+      <div><button class="p" data-act="save-cost">${this._t('cost_save')}</button> <span class="msg">${esc(this._msg.cost || '')}</span></div>`;
+  }
+
+  async _saveCost() {
+    const f = this._costForm();
+    const materials = { ...f.materials };
+    if (String(f.newName).trim() && f.newPrice !== '') materials[String(f.newName).trim()] = f.newPrice;
+    const rev = Date.now();
+    this._msg.cost = this._t('cost_saving');
+    await this._ws({ type: 'fire_event', event_type: 'bambu_tools_command',
+      event_data: { cmd: 'set_costs', rev, materials, price_kwh: f.price_kwh, watts: f.watts } });
+    // the service answers by republishing sensor.bambu_tools with this revision (or an error for it)
+    for (let i = 0; i < 40; i++) {
+      const s = this._status();
+      if (s?.settings_rev === rev) { this._costDirty = false; this._msg.cost = this._t('cost_saved'); return; }
+      if (s?.settings_error?.rev === rev) { this._msg.cost = this._t('cost_err', { e: s.settings_error.error }); return; }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    this._msg.cost = this._t('cost_err', { e: 'no answer from the app' });
+  }
+
   // weekly summary on the phone (blueprint bambu_weekly_report.yaml)
   _weeklyBlock(d) {
     const a = d.weekly;
@@ -389,7 +451,8 @@ class BambuSetupCard extends HTMLElement {
       ${step(2, s2, this._t('s2'), b2)}
       ${step(3, s3, this._t('s3'), b3)}
       ${step(4, s4, this._t('s4'), b4)}
-      ${step(5, s5, this._t(this._slicerHere(d) ? 's5' : 's5_app'), this._appBlock(d))}`);
+      ${step(5, s5, this._t(this._slicerHere(d) ? 's5' : 's5_app'), this._appBlock(d))}
+      ${step('€', !!this._costSet(), this._t('cost'), this._costBlock())}`);
   }
 
   // One printer only (on that printer's page): checks, notifications and links.
@@ -454,6 +517,8 @@ class BambuSetupCard extends HTMLElement {
           border: 1px solid var(--divider-color, #8885); background: var(--card-background-color); color: var(--primary-text-color); min-width: 140px; }
         .chk { gap: 6px; }
         .boot { display: flex; align-items: center; gap: 6px; font-size: 13.5px; margin: 6px 0 2px; }
+        input[type=number] { font: inherit; font-size: 13.5px; padding: 5px 8px; border-radius: 6px; width: 90px;
+          border: 1px solid var(--divider-color, #8885); background: var(--card-background-color); color: var(--primary-text-color); }
         button, a.s { font: inherit; font-size: 13px; border-radius: 16px; padding: 5px 12px; cursor: pointer; text-decoration: none; display: inline-block; }
         button.s, a.s { border: 1px solid var(--divider-color, #8885); background: none; color: var(--primary-text-color); }
         button.p { border: none; background: var(--primary-color); color: var(--text-primary-color, #fff); }
@@ -467,7 +532,16 @@ class BambuSetupCard extends HTMLElement {
   _onInput(ev) {
     const el = ev.composedPath()[0];
     if (!el || !el.dataset) return;
-    if (el.dataset.opt) {
+    if (el.dataset.cost) {
+      const f = this._costForm();
+      const k = el.dataset.cost;
+      if (k.startsWith('mat:')) f.materials[k.slice(4)] = el.value;
+      else if (k.startsWith('w:')) f.watts[k.slice(2)] = el.value;
+      else if (k === 'kwh') f.price_kwh = el.value;
+      else if (k === 'new-name') f.newName = el.value;
+      else if (k === 'new-price') f.newPrice = el.value;
+      this._costDirty = true;
+    } else if (el.dataset.opt) {
       this._form[el.dataset.opt] = el.type === 'checkbox' ? el.checked : el.value;
       this._dirty.add(el.dataset.opt);
     } else if (el.dataset.n) {
@@ -494,6 +568,7 @@ class BambuSetupCard extends HTMLElement {
     if (a === 'toggle') return this._run(() => h.callService(el.dataset.id.split('.')[0], 'toggle', { entity_id: el.dataset.id }));
     if (a === 'notify') return this._run(() => this._createNotify(el.dataset.prefix));
     if (a === 'weekly') return this._run(() => this._createWeekly());
+    if (a === 'save-cost') return this._run(() => this._saveCost());
     if (a === 'dash-create') return this._run(() => this._createDash());
     if (a === 'app') return this._run(() => this._sv(`/addons/${this._data.app.slug}/${el.dataset.op}`, 'post'));
     if (a === 'app-update') return this._run(() => this._sv(`/store/addons/${this._data.app.slug}/update`, 'post'));
