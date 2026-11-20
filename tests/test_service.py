@@ -52,7 +52,7 @@ class ServiceTest(unittest.TestCase):
         h = History()
         t0 = datetime(2026, 11, 20, 11, 0, tzinfo=timezone.utc)
         s = {**service.snapshot(STATES, "a1", ["sensor.ams_tray_3"]), "task": "Λευκά βυσματάκια.3mf"}
-        h.update("a1", "running", t0, s, name="A1 Rocket")
+        h.update("a1", "running", t0, s, name="My A1")
         h.update("a1", "finish", t0 + timedelta(minutes=95), s)
         with tempfile.TemporaryDirectory() as d:
             old = service.MEDIA
@@ -68,7 +68,7 @@ class ServiceTest(unittest.TestCase):
         lines = raw.decode("utf-8-sig").splitlines()
         self.assertTrue(lines[0].startswith("printer;file;start;end;minutes;result"))
         self.assertEqual(lines[1].split(";")[:8],
-                         ["A1 Rocket", "Λευκά βυσματάκια.3mf", "2026-11-20 13:00", "2026-11-20 14:35", "95", "finish", "100", "157,68"])
+                         ["My A1", "Λευκά βυσματάκια.3mf", "2026-11-20 13:00", "2026-11-20 14:35", "95", "finish", "100", "157,68"])
 
 
 if __name__ == "__main__":
