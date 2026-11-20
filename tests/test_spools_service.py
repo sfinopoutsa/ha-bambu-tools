@@ -92,6 +92,22 @@ class SpoolServiceTest(unittest.TestCase):
         self.assertEqual(self.events, [])  # plenty left
         self.assertEqual(service.Ctx.settings.remaining(self.asa, service.all_jobs(self.hist)), 971.3)
 
+    def test_spool_added_during_a_print(self):
+        self.hist = History()
+        service.Ctx.settings.apply({"cmd": "assign_spool", "id": self.white["id"], "tray": None})  # tray 3 empty at start
+        h = self.hist
+        t0 = datetime.now(timezone.utc) - timedelta(hours=1)
+        snap = {"task": "part", "grams": 40.0, "trays": {"AMS 1 Tray 3": 40.0}, "progress": 10}
+        h.update("a1", "running", t0, snap, name="My A1")
+        service.tag_spools(h, "a1", PRINTERS, STATES)
+        self.assertEqual(h.printer("a1")["active"]["spools"], {})
+        # the spool is set for tray 3 while printing; at the end the print takes it
+        service.Ctx.settings.apply({"cmd": "assign_spool", "id": self.white["id"], "tray": "sensor.my_ams_lite_tray_3"})
+        job = h.update("a1", "finish", t0 + timedelta(minutes=30), {**snap, "progress": 100})
+        service.tag_late("a1", PRINTERS, STATES, job)
+        self.assertEqual(job["spools"], {"AMS 1 Tray 3": self.white["id"]})
+        self.assertEqual(service.Ctx.settings.remaining(self.white, service.all_jobs(h)), 60.0)
+
     def test_spools_entity(self):
         self.hist = History()
         self.run_print("a1", "AMS 1 Tray 3", 50)

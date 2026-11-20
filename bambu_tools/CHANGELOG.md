@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.1
+
+- A print that started before a spool was set for its tray takes the spool in that tray when it ends (so a
+  spool added during a print counts that print).
+
 ## 1.8.0
 
 - **Spools** – a new *Filament* tab in the "Bambu" dashboard: your spools (name, material, colour, net weight,

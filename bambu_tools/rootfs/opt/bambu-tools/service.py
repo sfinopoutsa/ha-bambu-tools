@@ -405,6 +405,15 @@ def tag_spools(hist, prefix, printers, states):
     active["spools"], active["spools_tagged"] = tags, True
 
 
+def tag_late(prefix, printers, states, job):
+    """A print that started before any spool was set for its trays takes the spools in them at its end."""
+    if job.get("spools") or not job.get("trays"):
+        return
+    keys = tray_keys(printers[prefix]["trays"], states)
+    job["spools"] = {k: sp["id"] for k in job["trays"]
+                     for sp in [Ctx.settings.spool_in(keys.get(k)) if keys.get(k) else None] if sp}
+
+
 def check_low(hist, prefix, printers, job):
     for key, sid in (job.get("spools") or {}).items():
         sp = Ctx.settings.spool(sid)
@@ -594,6 +603,8 @@ def session(ws, hist):
                     if job:
                         log(f"{printers[prefix]['name']}: {job['result']} after {job['duration_s'] // 60} min: {job['file']}")
                         pending.append((time.time() + PHOTO_DELAY, prefix, "end", job["start"]))
+                        tag_late(prefix, printers, states, job)
+                        hist.save()
                         check_low(hist, prefix, printers, job)
                     elif before is None and to.get("state") in ACTIVE:
                         log(f"{printers[prefix]['name']}: print started: {hist.printer(prefix)['active'].get('file')}")
