@@ -46,6 +46,15 @@ The notification blueprint can also send *first layer done* with a camera pictur
 turned off in Home Assistant, it is turned on for a minute for the picture and then off again (input
 *Camera for the first-layer picture*), and *a few minutes before the end*.
 
+Every print also gets two **pictures** – after the first layer and at the end – in Home Assistant's media
+folder (`/media/bambu_tools/<printer>/`, visible under *Media*). They appear as thumbnails in the history. If
+the camera is turned off in Home Assistant, the app turns it on for the picture and off again. All prints are
+also written to `/media/bambu_tools/history.csv` (UTF-8, `;` separated) for Excel – over Samba it is in the
+*media* share.
+
+The **weekly report** (Settings page, step 3) sends the week's prints, hours and filament to your phone,
+Sunday 20:00 by default (change day and time with *Edit*).
+
 Each printer's page also has a **History** group: prints this month and in total (hours, filament), the
 print running now and the last prints with their result. The app records it while it runs – turn on
 *Start with Home Assistant* on the Settings page (step 5) – and the first time it imports the prints Home

@@ -16,8 +16,13 @@ def at(minutes):
     return T0 + timedelta(minutes=minutes)
 
 
-def snap(task="part.3mf", grams=12.5, meters=4.2, layers="50/50", start=None, end=None):
-    return {"task": task, "grams": grams, "meters": meters, "layers": layers, "start_time": start, "end_time": end}
+def snap(task="part.3mf", grams=12.5, meters=4.2, layers="50/50", start=None, end=None, progress=None, filament=None):
+    return {"task": task, "grams": grams, "meters": meters, "layers": layers, "start_time": start, "end_time": end,
+            "progress": progress, "filament": filament}
+
+
+PLA = {"tray": "sensor.ams_tray_2", "name": "eSUN PLA+", "type": "PLA", "color": "#101410"}
+PETG = {"tray": "sensor.ams_tray_1", "name": "Bambu PETG", "type": "PETG", "color": "#d1d5db"}
 
 
 class HistoryTest(unittest.TestCase):
@@ -138,6 +143,83 @@ class HistoryTest(unittest.TestCase):
         n = History().import_timeline("a1", [(at(0), "running"), (at(3), "finish")],
                                       lambda t: snap(task="auto_filament_cali.gcode", grams=125.8))
         self.assertEqual(n, 1)
+
+    def test_failed_print_counts_only_the_filament_used(self):
+        h = History()
+        h.update("h2s", "running", at(0), snap(grams=110.34, meters=36.0, progress=5))
+        job = h.update("h2s", "failed", at(83), snap(grams=110.34, meters=36.0, progress=25))
+        self.assertEqual(job["progress"], 25)
+        self.assertEqual(job["grams_planned"], 110.34)
+        self.assertAlmostEqual(job["grams"], 27.59, places=2)
+        self.assertAlmostEqual(job["meters"], 9.0, places=2)
+
+    def test_finished_print_counts_everything(self):
+        h = History()
+        h.update("a1", "running", at(0), snap(progress=10))
+        job = h.update("a1", "finish", at(30), snap(grams=20, progress=100))
+        self.assertEqual((job["progress"], job["grams"], job["grams_planned"]), (100, 20, 20))
+
+    def test_stopped_after_restart_keeps_last_progress(self):
+        h = History()
+        h.update("a1", "running", at(0), snap(progress=60))
+        h.update("a1", "unavailable", at(10), snap(progress=60))
+        job = h.update("a1", "idle", at(20), snap(grams=50, progress=0))  # printer restarted: 0 %
+        self.assertEqual(job["progress"], 60)
+        self.assertEqual(job["grams"], 30)
+
+    def test_filament_from_running_wins_over_prepare(self):
+        h = History()
+        h.update("a1", "prepare", at(0), snap(filament=PETG))  # the AMS is still on the previous tray
+        h.update("a1", "running", at(2), snap(filament=PLA))
+        h.update("a1", "pause", at(5), snap(filament=None))
+        job = h.update("a1", "finish", at(30), snap())
+        self.assertEqual(job["filament"], PLA)
+
+    def test_old_jobs_get_progress_later(self):
+        h = History()
+        h.update("h2s", "running", at(0), snap())
+        job = h.update("h2s", "failed", at(83), snap(grams=110.34))  # no progress known (version 1 data)
+        self.assertEqual(job["grams"], 110.34)
+        self.assertEqual(h.needs_progress("h2s"), [job])
+        h.set_progress(job, 25)
+        self.assertAlmostEqual(job["grams"], 27.59, places=2)
+        self.assertEqual(h.needs_progress("h2s"), [])
+
+    def test_version_1_file_is_migrated(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "history.json"
+            path.write_text('{"version": 1, "backfilled": ["a1"], "printers": {"a1": {"name": "A1", "active": null, "jobs": ['
+                            '{"file": "x.3mf", "start": "2026-11-10T08:00:00+00:00", "end": "2026-11-10T09:00:00+00:00",'
+                            ' "duration_s": 3600, "result": "finish", "grams": 10, "meters": 3, "layers": null}]}}}', encoding="utf-8")
+            h = History(path)
+            self.assertEqual(h.data["version"], 2)
+            job = h.printer("a1")["jobs"][0]
+            self.assertEqual((job["grams"], job["grams_planned"]), (10, 10))
+
+    def test_weeks_and_month_in_local_time(self):
+        athens = timezone(timedelta(hours=2))
+        h = History()
+        # Monday 2026-11-16 00:30 in Athens is still Sunday 22:30 UTC: it belongs to the new week there
+        for end, g in ((datetime(2026, 11, 15, 22, 30, tzinfo=timezone.utc), 5),
+                       (datetime(2026, 11, 15, 20, 0, tzinfo=timezone.utc), 7),
+                       (datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc), 11)):
+            h.update("a1", "running", end - timedelta(minutes=30), snap())
+            h.update("a1", "finish", end, snap(grams=g))
+        now = datetime(2026, 11, 18, 12, 0, tzinfo=timezone.utc)
+        a = h.attributes("a1", tz=athens, now=now)
+        self.assertEqual(a["this_week"]["from"], "2026-11-16")
+        self.assertEqual((a["this_week"]["prints"], a["this_week"]["grams"]), (1, 5))
+        self.assertEqual((a["last_week"]["prints"], a["last_week"]["grams"]), (2, 18))
+        self.assertEqual((a["this_month"]["month"], a["this_month"]["prints"]), ("2026-11", 3))
+
+    def test_cost_function(self):
+        h = History()
+        h.update("a1", "running", at(0), snap())
+        h.update("a1", "finish", at(60), snap(grams=100))
+        a = h.attributes("a1", tz=timezone.utc, now=at(120), cost=lambda j: round((j["grams"] or 0) * 0.02, 2))
+        self.assertEqual(a["jobs"][0]["cost"], 2.0)
+        self.assertEqual(a["total_cost"], 2.0)
+        self.assertEqual(a["this_month"]["cost"], 2.0)
 
     def test_parse_time(self):
         self.assertEqual(parse_time("2026-11-13T08:59:24+00:00"), datetime(2026, 11, 13, 8, 59, 24, tzinfo=timezone.utc))

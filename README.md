@@ -9,7 +9,8 @@ One Home Assistant **app** for Bambu Lab printers:
   HMS/print errors, and buttons for the camera stream and the chamber light.
 - **Automatic "Bambu" dashboard** – finds every ha-bambulab printer (overview + one page per printer).
 - **Phone notifications** blueprint – finished, failed, paused, HMS, first layer done and "almost done", with the camera image.
-- **Print history** per printer – recent prints, monthly and total hours and filament.
+- **Print history** per printer – recent prints with a picture of each, filament used (per tray), monthly and
+  total hours and filament, a weekly report on the phone and a CSV for Excel.
 - **Bambu Studio in the browser** – the full slicer, on your home network (x86-64 machines only).
 - **Settings page** – a setup wizard with every setting in one place (printers, notifications, dashboard, slicer),
   plus a Settings part on every printer's page (its controls, checks and notifications).

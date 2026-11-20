@@ -6,12 +6,19 @@ print status changes and publishes `attributes()` as a Home Assistant entity per
 A job starts when the status enters one of ACTIVE and ends when it becomes finish / failed (result = that
 state) or idle (result "stopped", e.g. the printer was restarted). "offline"/"unavailable" in between
 do not end a job.
+
+A job: file, start, end, duration_s, result, progress (% reached), grams / meters (filament actually used:
+for failed and stopped prints the sliced amount scaled by the progress; the sliced amount is kept in
+grams_planned), trays (grams used per AMS tray / external spool, from ha-bambulab's per-tray weights; the
+sliced split in trays_planned), layers, filament (the active tray: tray entity, name, type, colour) and photos
+(media paths of the first-layer and end pictures, filled in by the service).
 """
 import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+VERSION = 2
 ACTIVE = {"running", "pause", "prepare", "slicing"}
 ENDED = {"finish", "failed"}
 KEEP_JOBS = 1000   # kept in the file
@@ -49,15 +56,29 @@ def is_calibration(file):
 
 
 def _filament(job):
+    """Filament actually used: none for calibration jobs; for failed / stopped prints the sliced amount
+    scaled by the progress reached (when known). Safe to run again on a stored job."""
     if is_calibration(job["file"]):
-        job["grams"] = job["meters"] = None
+        job["grams"] = job["meters"] = job["grams_planned"] = None
+        job["trays"] = job["trays_planned"] = None
+        return job
+    if "grams_planned" not in job:
+        job["grams_planned"], job["meters_planned"] = job.get("grams"), job.get("meters")
+    if "trays_planned" not in job:
+        job["trays_planned"] = job.get("trays")
+    prog = job.get("progress")
+    share = 1.0 if job["result"] == "finish" or prog is None else max(0.0, min(100.0, prog)) / 100
+    for used, planned in (("grams", "grams_planned"), ("meters", "meters_planned")):
+        job[used] = None if job.get(planned) is None else round(job[planned] * share, 2)
+    planned = job.get("trays_planned")
+    job["trays"] = {k: round(v * share, 2) for k, v in planned.items()} if planned else None
     return job
 
 
 class History:
     def __init__(self, path=None):
         self.path = Path(path) if path else None
-        self.data = {"version": 1, "printers": {}, "backfilled": []}
+        self.data = {"version": VERSION, "printers": {}, "backfilled": []}
         if self.path and self.path.exists():
             try:
                 self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
@@ -66,6 +87,27 @@ class History:
         for p in self.data["printers"].values():  # rules added later apply to jobs already stored
             for job in p.get("jobs", []):
                 _filament(job)
+        self.data["version"] = VERSION
+
+    def find_job(self, prefix, start):
+        """The active or finished job that started at `start` (ISO), or None."""
+        p = self.printer(prefix)
+        if p.get("active") and p["active"].get("start") == start:
+            return p["active"]
+        return next((j for j in reversed(p["jobs"]) if j["start"] == start), None)
+
+    def all_jobs(self):
+        """[(prefix, printer name, job)] of every printer, oldest first."""
+        rows = [(prefix, p.get("name") or prefix, j) for prefix, p in self.data["printers"].items() for j in p["jobs"]]
+        return sorted(rows, key=lambda r: r[2]["end"])
+
+    def needs_progress(self, prefix):
+        """Failed / stopped jobs stored before the progress was recorded (filled in from the recorder)."""
+        return [j for j in self.printer(prefix)["jobs"] if j["result"] != "finish" and j.get("progress") is None]
+
+    def set_progress(self, job, progress):
+        job["progress"] = progress
+        _filament(job)
 
     def save(self):
         if not self.path:
@@ -93,7 +135,7 @@ class History:
         if status in ACTIVE:
             if not active:
                 start = st if self._plausible_start(p, st, now, max_age) else now
-                p["active"] = {"start": iso(start), "file": snap.get("task") or ""}
+                p["active"] = active = {"start": iso(start), "file": snap.get("task") or ""}
             else:
                 if snap.get("task") and not active.get("file"):
                     active["file"] = snap["task"]
@@ -102,6 +144,13 @@ class History:
                 if st and cur and st != cur and abs((st - cur).total_seconds()) <= 1800 \
                         and self._plausible_start(p, st, now, max_age + timedelta(minutes=30)):
                     active["start"] = iso(st)
+            # filament: at "prepare" the AMS may still be switching trays, so "running" wins
+            if snap.get("filament") and (status == "running" or not active.get("filament")):
+                active["filament"] = snap["filament"]
+            if snap.get("progress") is not None and status != "prepare":
+                active["progress"] = snap["progress"]
+            if snap.get("trays") and status != "prepare":  # sliced split per tray, updated after "prepare"
+                active["trays"] = snap["trays"]
             return None
         if status in ENDED or status == "idle":
             result = status if status in ENDED else "stopped"
@@ -140,9 +189,13 @@ class History:
             "end": iso(end),
             "duration_s": max(0, int((end - start).total_seconds())),
             "result": result,
+            "progress": self._end_progress(active, result, snap),
             "grams": snap.get("grams"),
             "meters": snap.get("meters"),
             "layers": snap.get("layers"),
+            "filament": active.get("filament") or snap.get("filament"),
+            "trays": snap.get("trays") or active.get("trays"),
+            "photos": dict(active.get("photos") or {}),
         }
         _filament(job)
         p["active"] = None
@@ -153,6 +206,16 @@ class History:
         p["jobs"].append(job)
         del p["jobs"][:-KEEP_JOBS]
         return job
+
+    @staticmethod
+    def _end_progress(active, result, snap):
+        if result == "finish":
+            return 100
+        prog = snap.get("progress")
+        # after a restart ("idle") the printer reports 0 %: keep the last value seen while printing
+        if prog is None or (result == "stopped" and prog == 0):
+            prog = active.get("progress")
+        return prog
 
     # ---------------- history import ----------------
     def import_timeline(self, prefix, timeline, values_at, name=None):
@@ -169,11 +232,13 @@ class History:
                 st = snap.get("start_time")
                 if not (st and start - timedelta(hours=2) <= st <= t):
                     st = start
+                result = status if status in ENDED else "stopped"
                 job = {
                     "file": snap.get("task") or "", "start": iso(st), "end": iso(t),
                     "duration_s": max(0, int((t - st).total_seconds())),
-                    "result": status if status in ENDED else "stopped",
+                    "result": result, "progress": 100 if result == "finish" else snap.get("progress"),
                     "grams": snap.get("grams"), "meters": snap.get("meters"), "layers": snap.get("layers"),
+                    "filament": snap.get("filament"), "trays": snap.get("trays"),
                 }
                 if (job["file"], job["start"][:16]) not in known:
                     found.append(_filament(job))
@@ -183,30 +248,46 @@ class History:
         return len(found)
 
     # ---------------- what the card shows ----------------
-    def attributes(self, prefix, tz=None):
+    @staticmethod
+    def summarize(jobs, cost=None):
+        """prints / finished / failed / hours / grams (and cost, when a cost function is given)."""
+        out = {"prints": len(jobs), "finished": sum(1 for j in jobs if j["result"] == "finish"),
+               "hours": round(sum(j["duration_s"] for j in jobs) / 3600, 1),
+               "grams": round(sum((j.get("grams") or 0) for j in jobs))}
+        out["failed"] = out["prints"] - out["finished"]
+        if cost:
+            costs = [cost(j) for j in jobs]
+            out["cost"] = round(sum(c for c in costs if c is not None), 2)
+        return out
+
+    def attributes(self, prefix, tz=None, now=None, cost=None):
+        """What the history card shows. Months and weeks are counted in `tz` (Home Assistant's zone)."""
         p = self.printer(prefix)
         jobs = p["jobs"]
-        months = {}
+        now = (now or datetime.now(timezone.utc)).astimezone(tz) if tz else (now or datetime.now()).astimezone()
+        local = lambda j: parse_time(j["end"]).astimezone(tz) if tz else parse_time(j["end"]).astimezone()  # noqa: E731
+        by_month = {}
         for j in jobs:
-            end = parse_time(j["end"])
-            key = (end.astimezone(tz) if tz else end.astimezone()).strftime("%Y-%m")
-            m = months.setdefault(key, {"month": key, "prints": 0, "finished": 0, "failed": 0, "hours": 0.0, "grams": 0.0})
-            m["prints"] += 1
-            m["finished" if j["result"] == "finish" else "failed"] += 1
-            m["hours"] += j["duration_s"] / 3600
-            m["grams"] += j.get("grams") or 0
-        for m in months.values():
-            m["hours"] = round(m["hours"], 1)
-            m["grams"] = round(m["grams"])
-        total_h = sum(j["duration_s"] for j in jobs) / 3600
-        total_g = sum((j.get("grams") or 0) for j in jobs)
+            by_month.setdefault(local(j).strftime("%Y-%m"), []).append(j)
+        months = [{"month": k, **self.summarize(v, cost)} for k, v in sorted(by_month.items(), reverse=True)][:SHOW_MONTHS]
+        week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        this_week = [j for j in jobs if local(j) >= week_start]
+        last_week = [j for j in jobs if week_start - timedelta(days=7) <= local(j) < week_start]
+        shown = list(reversed(jobs[-SHOW_JOBS:]))
+        if cost:
+            shown = [{**j, "cost": cost(j)} for j in shown]
+        total = self.summarize(jobs, cost)
         return {
             "printer": prefix,
-            "jobs": list(reversed(jobs[-SHOW_JOBS:])),
-            "months": sorted(months.values(), key=lambda m: m["month"], reverse=True)[:SHOW_MONTHS],
-            "total_prints": len(jobs),
-            "total_finished": sum(1 for j in jobs if j["result"] == "finish"),
-            "total_hours": round(total_h, 1),
-            "total_grams": round(total_g),
+            "jobs": shown,
+            "months": months,
+            "this_month": {"month": now.strftime("%Y-%m"), **self.summarize(by_month.get(now.strftime("%Y-%m"), []), cost)},
+            "this_week": {"from": week_start.date().isoformat(), **self.summarize(this_week, cost)},
+            "last_week": {"from": (week_start - timedelta(days=7)).date().isoformat(), **self.summarize(last_week, cost)},
+            "total_prints": total["prints"],
+            "total_finished": total["finished"],
+            "total_hours": total["hours"],
+            "total_grams": total["grams"],
+            **({"total_cost": total["cost"]} if cost else {}),
             "active": p.get("active"),
         }

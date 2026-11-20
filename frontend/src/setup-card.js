@@ -7,6 +7,8 @@ import { findPrinters } from './discovery.js';
 import { lang } from './i18n.js';
 
 const BLUEPRINT = 'bambu_tools/bambu_print_notifications.yaml';
+const WEEKLY = 'bambu_tools/bambu_weekly_report.yaml';
+const WEEKLY_ID = 'bambu_tools_weekly_report';
 const DASH = 'bambu-tools';
 const EVENTS = ['finish', 'failed', 'pause', 'hms', 'first_layer', 'near_end'];
 const DEFAULT_EVENTS = ['finish', 'failed', 'pause', 'hms', 'first_layer'];
@@ -37,6 +39,7 @@ const S = {
     s5_app: 'The Bambu Tools app',
     ev_first_layer: 'first layer (picture)', ev_near_end: 'near the end',
     o_boot: 'Start with Home Assistant (needed for the print history)',
+    weekly: 'Weekly report', weekly_off: 'a summary of the week on Sunday at 20:00', weekly_desc: '{d} {t} · {p}',
     bl: 'ha-bambulab {v}', bl_ok: 'up to date', bl_new: 'version {v} is available', bl_update: 'Update', bl_hacs: 'Update from the store',
     bl_by_app: 'installed by this app: it is updated when the app restarts',
     bl_by_hand: 'installed by hand: "Update" lets the app keep it up to date from now on',
@@ -69,6 +72,7 @@ const S = {
     s5_app: 'Το app Bambu Tools',
     ev_first_layer: '1ο layer (με εικόνα)', ev_near_end: 'λίγο πριν το τέλος',
     o_boot: 'Ξεκινά μαζί με το Home Assistant (χρειάζεται για το ιστορικό εκτυπώσεων)',
+    weekly: 'Εβδομαδιαία αναφορά', weekly_off: 'σύνοψη της εβδομάδας την Κυριακή στις 20:00', weekly_desc: '{d} {t} · {p}',
     bl: 'ha-bambulab {v}', bl_ok: 'ενημερωμένο', bl_new: 'υπάρχει η έκδοση {v}', bl_update: 'Ενημέρωση', bl_hacs: 'Ενημέρωση από το store',
     bl_by_app: 'το έβαλε το app: ενημερώνεται όταν κάνει restart το app',
     bl_by_hand: 'μπήκε με το χέρι: το «Ενημέρωση» αφήνει το app να το κρατά ενημερωμένο από εδώ και πέρα',
@@ -144,6 +148,7 @@ class BambuSetupCard extends HTMLElement {
       for (const a of cfgs.filter(Boolean)) {
         const ub = a.cfg.use_blueprint;
         if (ub && String(ub.path).endsWith('bambu_print_notifications.yaml')) d.ours[ub.input?.print_status] = a;
+        else if (ub && String(ub.path).endsWith('bambu_weekly_report.yaml')) d.weekly = a;
         else if (!ub && JSON.stringify(a.cfg).includes('_print_status') && /notify/.test(JSON.stringify(a.cfg.actions || a.cfg.action || ''))) d.legacy.push(a);
       }
       if (!this._config?.printer) { // dashboard and app: only on the full Settings page
@@ -234,6 +239,38 @@ class BambuSetupCard extends HTMLElement {
       <div class="form"><label>${this._t('phone')} <select data-n="${esc(p.prefix)}" data-field="phone">${opts}</select></label>
       <div class="evs"><span>${this._t('events')}:</span> ${checks}</div>
       <button class="p" data-act="notify" data-prefix="${esc(p.prefix)}">${this._t('enable')}</button></div>`, boxed);
+  }
+
+  // weekly summary on the phone (blueprint bambu_weekly_report.yaml)
+  _weeklyBlock(d) {
+    const a = d.weekly;
+    if (a) {
+      const on = a.state === 'on';
+      const inp = a.cfg.use_blueprint.input || {};
+      const phone = d.phones.find((x) => x.id === inp.notify_device)?.name || '';
+      const day = new Date(2026, 10, 15 + ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(inp.weekday || 'sun'))
+        .toLocaleDateString(lang(this._config?.language || this._hass) === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long' });
+      return this._box({ name: this._t('weekly') }, this._row(on, this._t(on ? 'enabled' : 'disabled'),
+        esc(this._t('weekly_desc', { d: day, t: String(inp.at_time || '20:00').slice(0, 5), p: phone })),
+        `<button class="s" data-act="toggle" data-id="${esc(a.entity)}">${this._t(on ? 'disable' : 'turn_on')}</button>
+         <button class="s" data-act="nav" data-path="/config/automation/edit/${esc(a.id)}">${this._t('edit')}</button>`, false), true);
+    }
+    if (!d.phones.length) return '';
+    return this._box({ name: this._t('weekly') }, `<div class="row"><span class="txt">${esc(this._t('weekly_off'))}</span>
+      <button class="p" data-act="weekly">${this._t('enable')}</button></div>`, true);
+  }
+
+  async _createWeekly() {
+    const d = this._data;
+    const phone = Object.values(d.ours)[0]?.cfg?.use_blueprint?.input?.notify_device || d.phones[0]?.id;
+    if (!phone) return;
+    await this._hass.callApi('POST', `config/automation/config/${WEEKLY_ID}`, {
+      alias: 'Bambu Tools – weekly report',
+      description: 'Created by the Bambu Tools setup page.',
+      use_blueprint: { path: WEEKLY, input: { notify_device: phone, weekday: 'sun', at_time: '20:00:00', dashboard_path: `/${DASH}/overview` } },
+    });
+    const exists = () => Object.values(this._hass.states).some((st) => st.entity_id.startsWith('automation.') && st.attributes.id === WEEKLY_ID);
+    for (let i = 0; i < 40 && this.isConnected && !exists(); i++) await new Promise((r) => setTimeout(r, 250));
   }
 
   _appBlock(d) {
@@ -334,7 +371,8 @@ class BambuSetupCard extends HTMLElement {
     const b2 = printers.length ? printers.map((p) => this._printerChecks(p)).join('') : `<div class="hint">${this._t('no_printers')}</div>`;
     const legacy = d.legacy.filter((a) => a.state === 'on').map((a) => `<div class="warnbox">${this._t('legacy', { n: esc(a.name) })}
       <button class="s" data-act="toggle" data-id="${esc(a.entity)}">${this._t('disable')}</button></div>`).join('');
-    const b3 = printers.length ? legacy + printers.map((p) => this._notifyBlock(p, d)).join('') : `<div class="hint">${this._t('no_printers')}</div>`;
+    const b3 = printers.length ? legacy + printers.map((p) => this._notifyBlock(p, d)).join('') + this._weeklyBlock(d)
+      : `<div class="hint">${this._t('no_printers')}</div>`;
     const langSel = ['', 'el', 'en'].map((v) => `<option value="${v}"${(d.dashLang || '') === v ? ' selected' : ''}>${v === '' ? this._t('auto') : v === 'el' ? 'Ελληνικά' : 'English'}</option>`).join('');
     const b4 = d.dash
       ? `<div>${this._t('dash_ok')} <button class="s" data-act="nav" data-path="/${DASH}/overview">${this._t('open')}</button></div>
@@ -455,6 +493,7 @@ class BambuSetupCard extends HTMLElement {
     if (a === 'restart-ha') { if (window.confirm(this._t('restart_q'))) h.callService('homeassistant', 'restart'); return null; }
     if (a === 'toggle') return this._run(() => h.callService(el.dataset.id.split('.')[0], 'toggle', { entity_id: el.dataset.id }));
     if (a === 'notify') return this._run(() => this._createNotify(el.dataset.prefix));
+    if (a === 'weekly') return this._run(() => this._createWeekly());
     if (a === 'dash-create') return this._run(() => this._createDash());
     if (a === 'app') return this._run(() => this._sv(`/addons/${this._data.app.slug}/${el.dataset.op}`, 'post'));
     if (a === 'app-update') return this._run(() => this._sv(`/store/addons/${this._data.app.slug}/update`, 'post'));

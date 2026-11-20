@@ -1,0 +1,81 @@
+blueprint:
+  name: "Bambu Tools: weekly report"
+  description: >-
+    Sends a summary of the week's 3D prints to your phone (Home Assistant Companion app): prints, finished
+    and failed, hours and filament, per printer. Needs the Bambu Tools app (it keeps the print history). ·
+    Εβδομαδιαία σύνοψη των εκτυπώσεων στο κινητό: εκτυπώσεις, επιτυχημένες και αποτυχημένες, ώρες και
+    νήμα, ανά εκτυπωτή.
+  domain: automation
+  author: Bambu Tools
+  source_url: https://github.com/sfinopoutsa/ha-bambu-tools/blob/main/bambu_tools/rootfs/opt/bambu-tools/blueprints/bambu_weekly_report.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    notify_device:
+      name: Phone / Κινητό
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    weekday:
+      name: Day / Ημέρα
+      default: sun
+      selector:
+        select:
+          options:
+            - { label: Monday / Δευτέρα, value: mon }
+            - { label: Tuesday / Τρίτη, value: tue }
+            - { label: Wednesday / Τετάρτη, value: wed }
+            - { label: Thursday / Πέμπτη, value: thu }
+            - { label: Friday / Παρασκευή, value: fri }
+            - { label: Saturday / Σάββατο, value: sat }
+            - { label: Sunday / Κυριακή, value: sun }
+    at_time:
+      name: Time / Ώρα
+      default: "20:00:00"
+      selector:
+        time: {}
+    skip_empty:
+      name: Skip weeks without prints / Όχι σε εβδομάδες χωρίς εκτυπώσεις
+      default: true
+      selector:
+        boolean: {}
+    dashboard_path:
+      name: Page to open / Σελίδα που ανοίγει
+      default: /bambu-tools/overview
+      selector:
+        text: {}
+
+mode: single
+
+triggers:
+  - trigger: time
+    at: !input at_time
+
+variables:
+  skip_empty: !input skip_empty
+  dashboard_path: !input dashboard_path
+  # on Monday morning "this week" has only just begun: report the week that ended
+  w: >-
+    {% set s = state_attr('sensor.bambu_tools', 'this_week') %}
+    {% if now().weekday() == 0 and now().hour < 12 %}{% set s = state_attr('sensor.bambu_tools', 'last_week') %}{% endif %}
+    {{ s or {} }}
+
+conditions:
+  - condition: time
+    weekday: !input weekday
+  - condition: template
+    value_template: "{{ w.prints is defined and (not skip_empty or (w.prints | int(0)) > 0) }}"
+
+actions:
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: "📊 3D prints · {{ w.from }}"
+    message: >-
+      {{ w.prints }} prints / εκτυπώσεις ({{ w.finished }} ✓ {{ w.failed }} ✗) · {{ w.hours }} h · {{ w.grams | round(0) }} g
+      {%- for name, p in (w.printers or {}).items() if p.prints > 0 %}
+      {{ name }}: {{ p.prints }} · {{ p.hours }} h · {{ p.grams | round(0) }} g{% endfor %}
+    data:
+      url: "{{ dashboard_path }}"
+      clickAction: "{{ dashboard_path }}"

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.0
+
+- **A picture of every print**: after the first layer and at the end, saved in Home Assistant's media folder
+  (`/media/bambu_tools/<printer>/`, also in *Media* in the sidebar). The history shows them as thumbnails;
+  click for the full picture. A camera that is off in Home Assistant is turned on for the picture and off
+  again. The newest 400 pictures are kept.
+- **Filament per print**: the history shows the filament (colour, name, material) and keeps the grams per AMS
+  tray / external spool, from ha-bambulab's per-tray weights.
+- **Failed and stopped prints count only the filament used** (the sliced amount scaled by the progress
+  reached); the history shows where they stopped ("failed at 25%"). Older failed prints are corrected from
+  the recorder when it still has them.
+- **Weekly report**: a new blueprint and a switch on the Settings page (step 3): a summary of the week's
+  prints on your phone, Sunday 20:00 by default.
+- `history.csv` with all prints, for Excel (UTF-8 with BOM, `;` separated), in `/media/bambu_tools/`
+  (Samba: the *media* share).
+- Months and weeks are counted in Home Assistant's time zone.
+
 ## 1.5.2
 
 - Print history: a print's start time comes from the printer only when it really belongs to this print.
