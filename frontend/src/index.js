@@ -4,4 +4,5 @@ import './status-card.js';
 import './setup-card.js';
 import './collapse-card.js';
 import './history-card.js';
+import './spools-card.js';
 import './strategy.js';

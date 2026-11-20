@@ -143,6 +143,11 @@ class BambuToolsDashboardStrategy {
           sections: printers.map((p) => ({ type: 'grid', cards: [c.status(p), ...c.camera(p, hass), c.layers(p, 7, 400)] })),
         },
         ...printers.map((p) => printerView(p, hass, c, lng)),
+        // spools and what is left on them (bambu-spools-card), in the dashboard's language
+        {
+          title: t(lng, 'filament'), path: 'filament', icon: 'mdi:printer-3d-nozzle-outline', type: 'panel',
+          cards: [{ type: 'custom:bambu-spools-card', ...(config.language ? { language: config.language } : {}) }],
+        },
         setup,
       ],
     };

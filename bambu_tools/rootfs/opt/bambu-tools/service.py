@@ -41,6 +41,7 @@ except ImportError:  # pragma: no cover
 HISTORY_FILE = Path("/data/history.json")
 SETTINGS_FILE = Path("/data/settings.json")
 COMMAND_EVENT = "bambu_tools_command"
+SPOOLS_ENTITY = "sensor.bambu_tools_spools"
 MEDIA = Path("/media/bambu_tools")
 MEDIA_ID = "media-source://media_source/local/bambu_tools"
 STATUS_ENTITY = "sensor.bambu_tools"
@@ -98,6 +99,31 @@ def discover(ws):
                                if e.get("device_id") in children and e.get("entity_id", "").startswith("sensor.")
                                and (TRAY_RE.search(e["entity_id"]) or EXT_RE.search(e["entity_id"])))
     return printers
+
+
+def tray_keys(trays, states):
+    """{ha-bambulab tray key ("AMS 1 Tray 3", "External Spool"): tray entity} where the match is certain:
+    the only external spool of the printer; the trays of its only AMS by number; with several AMS units only
+    the active tray (its ams_index / tray_index attributes)."""
+    keys = {}
+    ext = [t for t in trays if EXT_RE.search(t)]
+    if len(ext) == 1:
+        keys["External Spool"] = ext[0]
+    units = {}
+    for t in trays:
+        m = TRAY_RE.search(t)
+        if m:
+            units.setdefault(t[:m.start()], {})[int(m.group(1))] = t
+    if len(units) == 1:
+        for n, t in next(iter(units.values())).items():
+            keys[f"AMS 1 Tray {n}"] = t
+    else:
+        for unit in units.values():
+            for t in unit.values():
+                a = (states.get(t) or {}).get("attributes") or {}
+                if a.get("active") and isinstance(a.get("ams_index"), int) and isinstance(a.get("tray_index"), int):
+                    keys[f"AMS {a['ams_index'] + 1} Tray {a['tray_index'] + 1}"] = t
+    return keys
 
 
 def tray_info(state):
@@ -347,6 +373,75 @@ def publish_status(hist, printers):
     })
 
 
+def fire(event_type, data):
+    try:
+        _api(f"events/{event_type}", "POST", data)
+    except Exception as e:
+        log(f"could not fire {event_type}: {e}")
+
+
+def all_jobs(hist):
+    return [j for _, _, j in hist.all_jobs()]
+
+
+def tag_spools(hist, prefix, printers, states):
+    """When a print is running and its per-tray weights are known: remember which spool is in each of its trays
+    and warn when one of them does not hold enough filament for it. Once per print."""
+    active = hist.printer(prefix).get("active")
+    if not active or active.get("spools_tagged") or not active.get("trays"):
+        return
+    keys = tray_keys(printers[prefix]["trays"], states)
+    tags = {}
+    for key, planned in active["trays"].items():
+        sp = Ctx.settings.spool_in(keys.get(key)) if keys.get(key) else None
+        if sp:
+            tags[key] = sp["id"]
+            left = Ctx.settings.remaining(sp, all_jobs(hist))
+            if planned and left < planned:
+                log(f"{printers[prefix]['name']}: {sp['name']} has {left:.0f} g, the print needs {planned:.0f} g")
+                fire("bambu_tools_filament_short", {"printer": prefix, "printer_name": printers[prefix]["name"],
+                                                    "spool": sp["name"], "tray": key, "remaining": round(left),
+                                                    "needed": round(planned)})
+    active["spools"], active["spools_tagged"] = tags, True
+
+
+def check_low(hist, prefix, printers, job):
+    for key, sid in (job.get("spools") or {}).items():
+        sp = Ctx.settings.spool(sid)
+        if not sp:
+            continue
+        left = Ctx.settings.remaining(sp, all_jobs(hist))
+        if left < Ctx.settings.data.get("low_grams", 100):
+            fire("bambu_tools_spool_low", {"printer": prefix, "printer_name": printers[prefix]["name"],
+                                           "spool": sp["name"], "tray": key, "remaining": round(max(left, 0))})
+
+
+def publish_spools(hist, printers, states=None):
+    """sensor.bambu_tools_spools: the spools with what is left, and the printers' trays (for the Filament page)."""
+    if states is not None:
+        trays = {}
+        for prefix, info in printers.items():
+            keys = {ent: key for key, ent in tray_keys(info["trays"], states).items()}
+            rows = []
+            for ent in info["trays"]:
+                st = states.get(ent) or {}
+                a = st.get("attributes") or {}
+                sp = Ctx.settings.spool_in(ent)
+                rows.append({"tray": ent, "key": keys.get(ent), "label": a.get("friendly_name") or ent,
+                             "name": a.get("name") or "", "type": a.get("type"), "color": str(a.get("color") or "")[:7] or None,
+                             "empty": bool(a.get("empty")), "spool": sp["id"] if sp else None})
+            trays[prefix] = {"name": info["name"], "trays": rows}
+        Ctx.trays = trays
+    view = Ctx.settings.spools_view(all_jobs(hist))
+    active = [v for v in view if not v.get("archived")]
+    set_state(SPOOLS_ENTITY, str(len(active)), {
+        "friendly_name": "Bambu Tools spools", "icon": "mdi:printer-3d-nozzle-outline", "unit_of_measurement": "spools",
+        "spools": active, "archived": [v for v in view if v.get("archived")][-20:],
+        "printers": getattr(Ctx, "trays", {}), "low_grams": Ctx.settings.data.get("low_grams", 100),
+        "currency": Ctx.currency, "settings_rev": Ctx.settings.data.get("rev"), "settings_error": Ctx.settings_error,
+    })
+
+
 def publish_all(hist, printers):
     for prefix, info in printers.items():
         publish_history(hist, prefix, info["name"])
@@ -355,6 +450,10 @@ def publish_all(hist, printers):
         write_csv(hist, Ctx.decimal, Ctx.settings)
     except Exception as e:
         log(f"could not write history.csv: {e}")
+    try:
+        publish_spools(hist, printers)
+    except Exception as e:
+        log(f"could not publish the spools: {e}")
 
 
 def setup_locale(ws):
@@ -409,6 +508,10 @@ def handle_command(ws, hist, printers, event):
             Ctx.settings_error = {"rev": rev, "error": str(e)}
             log(f"settings command rejected: {e}")
     publish_all(hist, printers)
+    try:
+        publish_spools(hist, printers, get_states(ws))
+    except Exception as e:
+        log(f"could not publish the spools: {e}")
 
 
 # ---------------- the session ----------------
@@ -427,8 +530,13 @@ def session(ws, hist):
             job = hist.reconcile(prefix, status, now, snapshot(states, prefix, info["trays"]), info["name"])
             if job:
                 log(f"{info['name']}: recorded a print that ended while the app was not running: {job['file']}")
+            if status == "running":
+                tag_spools(hist, prefix, printers, states)
         hist.save()
-    publish_all(hist, printers)
+        publish_all(hist, printers)
+        publish_spools(hist, printers, states)
+    else:
+        publish_all(hist, printers)
 
     by_status = {info["status"]: prefix for prefix, info in printers.items()}
     by_layer = {f"sensor.{prefix}_current_layer": prefix for prefix in printers}
@@ -480,13 +588,18 @@ def session(ws, hist):
                     job = hist.update(prefix, to.get("state"), datetime.now(timezone.utc),
                                       snapshot(states, prefix, printers[prefix]["trays"]), printers[prefix]["name"])
                     hist.save()
+                    if to.get("state") == "running":
+                        tag_spools(hist, prefix, printers, states)
+                        hist.save()
                     if job:
                         log(f"{printers[prefix]['name']}: {job['result']} after {job['duration_s'] // 60} min: {job['file']}")
                         pending.append((time.time() + PHOTO_DELAY, prefix, "end", job["start"]))
+                        check_low(hist, prefix, printers, job)
                     elif before is None and to.get("state") in ACTIVE:
                         log(f"{printers[prefix]['name']}: print started: {hist.printer(prefix)['active'].get('file')}")
                     if job or to.get("state") in ENDED or before is None:
                         publish_all(hist, printers)
+                        publish_spools(hist, printers, states)
                     else:
                         publish_history(hist, prefix, printers[prefix]["name"])
             continue

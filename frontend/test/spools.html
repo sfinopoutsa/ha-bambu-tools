@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spools card test</title>
+<style>
+  :root { --primary-text-color:#e1e1e1; --secondary-text-color:#9b9b9b; --card-background-color:#1c1c1c; --divider-color:#3a3a3a; --primary-color:#03a9f4; }
+  body { margin:0; padding:16px; background:#111; font-family: Roboto, system-ui, sans-serif; color:#ddd; max-width: 900px; }
+  ha-card { display:block; background: var(--card-background-color); border-radius:12px; border:1px solid #2a2a2a; }
+</style>
+</head>
+<body>
+<p>Serve the repository root (python -m http.server 8765) and open /frontend/test/spools.html. Commands are answered by a fake service below.</p>
+<div id="box"></div>
+<script type="module">
+import '../../bambu_tools/rootfs/opt/bambu-tools/www/bambu-tools.js';
+let rev = 0;
+const spools = [
+  { id: 's1', name: 'eSUN PLA+ white', material: 'PLA', color: '#ffffff', weight: 1000, remaining: 812, percent: 81, low: false, tray: 'sensor.ams_tray_3' },
+  { id: 's2', name: 'Polymaker PA6-CF20', material: 'PA6-CF', color: '#222222', weight: 500, remaining: 64, percent: 13, low: true, tray: null, price: 60 },
+];
+const printers = {
+  a1: { name: 'Printer A', trays: [
+    { tray: 'sensor.ams_tray_1', key: 'AMS 1 Tray 1', label: 'Tray 1', name: 'Generic PLA', type: 'PLA', color: '#f72323', spool: null },
+    { tray: 'sensor.ams_tray_3', key: 'AMS 1 Tray 3', label: 'Tray 3', name: 'eSUN PLA+', type: 'PLA', color: '#ffffff', spool: 's1' },
+    { tray: 'sensor.ext_a', key: 'External Spool', label: 'External', name: '', type: null, color: null, empty: true, spool: null }] },
+  h2s: { name: 'Printer B', trays: [{ tray: 'sensor.ext_b', key: 'External Spool', label: 'External', name: 'eSUN ASA +', type: 'ASA', color: '#000000', spool: null }] },
+};
+const state = () => ({ state: String(spools.length), attributes: { spools: structuredClone(spools), printers: structuredClone(printers), low_grams: 100, currency: 'EUR', settings_rev: rev } });
+const card = document.createElement('bambu-spools-card');
+card.setConfig({});
+const hass = { language: 'en', user: { is_admin: true }, states: { 'sensor.bambu_tools_spools': state() } };
+window.log = [];
+hass.callWS = async (msg) => {
+  window.log.push(msg);
+  const d = msg.event_data;
+  setTimeout(() => {   // the fake service
+    if (d.cmd === 'assign_spool') { for (const p of Object.values(printers)) for (const t of p.trays) { if (t.tray === d.tray) t.spool = d.id; else if (t.spool === d.id) t.spool = null; } }
+    if (d.cmd === 'add_spool') spools.push({ id: 's' + (spools.length + 1), ...d.spool, weight: +d.spool.weight, remaining: +d.spool.weight - (+d.spool.used_before || 0), percent: 100, low: false });
+    rev = d.rev;
+    card.hass = { ...hass, states: { 'sensor.bambu_tools_spools': state() } };
+  }, 300);
+};
+card.hass = hass;
+document.getElementById('box').append(card);
+window.card = card;
+</script>
+</body>
+</html>

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0
+
+- **Spools** – a new *Filament* tab in the "Bambu" dashboard: your spools (name, material, colour, net weight,
+  filament already used, optional price per kg) and the tray each one is in, next to what every AMS tray /
+  external spool holds right now. What is left on a spool is worked out from the prints: when a print starts,
+  the app notes which spool is in each of its trays, and the filament the print uses (per tray, from
+  ha-bambulab) comes off that spool.
+- **Notifications** (blueprint): *not enough filament* when a print needs more than its spool holds, and
+  *spool almost empty* (below 100 g) after a print. New notification set-ups get both by default.
+- Print cost uses the spool's price first, then its material's.
+- Entity `sensor.bambu_tools_spools`.
+
 ## 1.7.0
 
 - **Cost of every print**: filament price per kg for each material and, optionally, the electricity price and

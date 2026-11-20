@@ -60,6 +60,13 @@ materials your prints used) and, if you want, the electricity price and each pri
 printing. The history then shows the cost of every print – filament (grams used × price of the print's
 material) plus electricity (an estimate: power × print time, pauses included, × price per kWh).
 
+**Spools** (*Filament* tab): add the spools you use – name, material, colour, net weight (and, for a spool
+you have already used, about how much is gone), optionally a price per kg – and choose the tray each one is
+in. Every print then takes the filament it uses from the spool in its tray (ha-bambulab reports the
+weight per tray), so the tab always shows what is left. You get a notification when a print needs more than
+its spool holds, and when a spool drops below 100 g. Trays are matched only where the match is certain (the
+external spool; the trays of a printer's only AMS); otherwise the tray shows no spool.
+
 Each printer's page also has a **History** group: prints this month and in total (hours, filament), the
 print running now and the last prints with their result. The app records it while it runs – turn on
 *Start with Home Assistant* on the Settings page (step 5) – and the first time it imports the prints Home

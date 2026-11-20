@@ -31,7 +31,7 @@ blueprint:
             - integration: mobile_app
     notify_on:
       name: Notify on / Ειδοποίηση για
-      default: [finish, failed, pause, hms, first_layer]
+      default: [finish, failed, pause, hms, first_layer, filament_short, spool_low]
       selector:
         select:
           multiple: true
@@ -48,6 +48,10 @@ blueprint:
               value: first_layer
             - label: A few minutes before the end / Λίγο πριν το τέλος
               value: near_end
+            - label: Not enough filament on the spool for a print / Δεν φτάνει το νήμα για την εκτύπωση
+              value: filament_short
+            - label: Spool almost empty / Η μπομπίνα τελειώνει
+              value: spool_low
     near_end_minutes:
       name: Minutes before the end / Λεπτά πριν το τέλος
       description: For "A few minutes before the end".
@@ -80,6 +84,7 @@ trigger_variables:
   status_entity: !input print_status
   near_minutes: !input near_end_minutes
   base: "{{ status_entity | regex_replace('_print_status$', '') }}"
+  pfx: "{{ status_entity | regex_replace('^sensor\\.', '') | regex_replace('_print_status$', '') }}"
   hms_entity: "{{ base | replace('sensor.', 'binary_sensor.') ~ '_hms_errors' }}"
   layer_entity: "{{ base ~ '_current_layer' }}"
   remaining_entity: "{{ base ~ '_remaining_time' }}"
@@ -109,6 +114,17 @@ triggers:
       {% set n = near_minutes | float(10) %}
       {{ is_state(status_entity, 'running') and 0 < m <= n and m > n - 3 }}
     id: near_end
+  # sent by the Bambu Tools app (spools page): a print needs more than the spool holds / a spool is almost empty
+  - trigger: event
+    event_type: bambu_tools_filament_short
+    event_data:
+      printer: "{{ pfx }}"
+    id: filament_short
+  - trigger: event
+    event_type: bambu_tools_spool_low
+    event_data:
+      printer: "{{ pfx }}"
+    id: spool_low
 
 variables:
   notify_on: !input notify_on
@@ -121,6 +137,7 @@ variables:
   progress: "{{ states('sensor.' ~ prefix ~ '_print_progress') }}"
   end_time: "{{ as_timestamp(states('sensor.' ~ prefix ~ '_end_time'), 0) | timestamp_custom('%H:%M') }}"
   st: "{{ trigger.to_state.state if trigger.id == 'status' else trigger.id }}"
+  ev: "{{ trigger.event.data if trigger.platform == 'event' else {} }}"
   camera_switch: "{{ 'switch.' ~ prefix ~ '_camera' }}"
   camera_for_picture: !input camera_for_picture
   borrow_camera: "{{ camera_for_picture and st == 'first_layer' and is_state(camera_switch, 'off') }}"
@@ -149,12 +166,16 @@ actions:
       {%- elif st == 'failed' %}❌ {{ name }}: failed / απέτυχε
       {%- elif st == 'first_layer' %}🟢 {{ name }}: first layer done / τέλος 1ου layer
       {%- elif st == 'near_end' %}⏳ {{ name }}: almost done / σχεδόν έτοιμο
+      {%- elif st == 'filament_short' %}⚠️ {{ name }}: not enough filament / δεν φτάνει το νήμα
+      {%- elif st == 'spool_low' %}🧵 {{ name }}: spool almost empty / η μπομπίνα τελειώνει
       {%- else %}⏸️ {{ name }}: paused / σε παύση{% endif %}
     message: >-
       {% if st == 'hms' %}{{ state_attr(hms_entity, 'Count') }} HMS · {{ task }}
       {%- elif st == 'finish' %}{{ task }}
       {%- elif st == 'first_layer' %}Check that it sticks / Δες αν κόλλησε · {{ task }}
       {%- elif st == 'near_end' %}{{ task }} · ends {{ end_time }} / τέλος {{ end_time }}
+      {%- elif st == 'filament_short' %}{{ ev.spool }}: {{ ev.remaining }} g left, the print needs {{ ev.needed }} g / έχει {{ ev.remaining }} g, θέλει {{ ev.needed }} g
+      {%- elif st == 'spool_low' %}{{ ev.spool }}: {{ ev.remaining }} g left / έμειναν {{ ev.remaining }} g
       {%- else %}{{ task }} · layer {{ layer }} ({{ progress }}%){% endif %}
     data:
       url: "{{ dashboard_path }}"
@@ -162,7 +183,7 @@ actions:
       entity_id: "camera.{{ prefix }}_camera"
       image: "/api/camera_proxy/camera.{{ prefix }}_camera"
       push:
-        interruption-level: "{{ 'time-sensitive' if st in ['failed', 'pause', 'hms'] else 'active' }}"
+        interruption-level: "{{ 'time-sensitive' if st in ['failed', 'pause', 'hms', 'filament_short'] else 'active' }}"
   # give the phone time to fetch the picture, then put the camera back as it was
   - if: "{{ borrow_camera }}"
     then:

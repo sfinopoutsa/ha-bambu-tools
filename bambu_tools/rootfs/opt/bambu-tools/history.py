@@ -203,6 +203,7 @@ class History:
             "layers": snap.get("layers"),
             "filament": active.get("filament") or snap.get("filament"),
             "trays": snap.get("trays") or active.get("trays"),
+            "spools": dict(active.get("spools") or {}),
             "photos": dict(active.get("photos") or {}),
         }
         _filament(job)
