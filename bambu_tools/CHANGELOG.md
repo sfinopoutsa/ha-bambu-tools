@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1
+
+- Failed prints: the printer resets the progress to 0 a few seconds after a failure; the history now keeps
+  the furthest progress reached (1.6.0 could record 0% and no filament). Prints affected are corrected from
+  the recorder automatically.
+
 ## 1.6.0
 
 - **A picture of every print**: after the first layer and at the end, saved in Home Assistant's media folder

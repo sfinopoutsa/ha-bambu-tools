@@ -175,6 +175,28 @@ class HistoryTest(unittest.TestCase):
         job = h.update("a1", "finish", at(30), snap())
         self.assertEqual(job["filament"], PLA)
 
+    def test_failed_progress_survives_reset_to_zero(self):
+        h = History()
+        h.update("h2s", "running", at(0), snap(progress=20))
+        h.update("h2s", "pause", at(80), snap(progress=26))
+        job = h.update("h2s", "failed", at(83), snap(grams=110.34, progress=0))  # reset already arrived
+        self.assertEqual(job["progress"], 26)
+        self.assertAlmostEqual(job["grams"], 28.69, places=2)
+
+    def test_version_2_zero_progress_is_asked_again(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "history.json"
+            path.write_text('{"version": 2, "backfilled": [], "printers": {"h2s": {"name": "H2S", "active": null, "jobs": ['
+                            '{"file": "x", "start": "2026-11-18T08:15:40+00:00", "end": "2026-11-18T09:38:16+00:00",'
+                            ' "duration_s": 4956, "result": "failed", "progress": 0, "grams": 0, "grams_planned": 110.34,'
+                            ' "meters": 0, "meters_planned": 36, "layers": null}]}}}', encoding="utf-8")
+            h = History(path)
+            job = h.printer("h2s")["jobs"][0]
+            self.assertIsNone(job["progress"])
+            self.assertEqual(h.needs_progress("h2s"), [job])
+            h.set_progress(job, 26)
+            self.assertAlmostEqual(job["grams"], 28.69, places=2)
+
     def test_old_jobs_get_progress_later(self):
         h = History()
         h.update("h2s", "running", at(0), snap())
@@ -192,7 +214,7 @@ class HistoryTest(unittest.TestCase):
                             '{"file": "x.3mf", "start": "2026-11-10T08:00:00+00:00", "end": "2026-11-10T09:00:00+00:00",'
                             ' "duration_s": 3600, "result": "finish", "grams": 10, "meters": 3, "layers": null}]}}}', encoding="utf-8")
             h = History(path)
-            self.assertEqual(h.data["version"], 2)
+            self.assertEqual(h.data["version"], 3)
             job = h.printer("a1")["jobs"][0]
             self.assertEqual((job["grams"], job["grams_planned"]), (10, 10))
 

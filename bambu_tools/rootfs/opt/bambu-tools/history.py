@@ -18,7 +18,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-VERSION = 2
+VERSION = 3
 ACTIVE = {"running", "pause", "prepare", "slicing"}
 ENDED = {"finish", "failed"}
 KEEP_JOBS = 1000   # kept in the file
@@ -84,8 +84,15 @@ class History:
                 self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
             except Exception:
                 pass
+        old = self.data.get("version", 1)
         for p in self.data["printers"].values():  # rules added later apply to jobs already stored
             for job in p.get("jobs", []):
+                if old < 3 and job["result"] != "finish" and job.get("progress") == 0:
+                    # 1.6.0 read the progress after the printer had reset it to 0: ask the recorder again
+                    job["progress"] = None
+                    job.pop("progress_unknown", None)
+                if job["result"] == "finish" and job.get("progress") is None:
+                    job["progress"] = 100  # stored before the progress was recorded
                 _filament(job)
         self.data["version"] = VERSION
 
@@ -103,7 +110,8 @@ class History:
 
     def needs_progress(self, prefix):
         """Failed / stopped jobs stored before the progress was recorded (filled in from the recorder)."""
-        return [j for j in self.printer(prefix)["jobs"] if j["result"] != "finish" and j.get("progress") is None]
+        return [j for j in self.printer(prefix)["jobs"]
+                if j["result"] != "finish" and j.get("progress") is None and not j.get("progress_unknown")]
 
     def set_progress(self, job, progress):
         job["progress"] = progress
@@ -211,11 +219,10 @@ class History:
     def _end_progress(active, result, snap):
         if result == "finish":
             return 100
-        prog = snap.get("progress")
-        # after a restart ("idle") the printer reports 0 %: keep the last value seen while printing
-        if prog is None or (result == "stopped" and prog == 0):
-            prog = active.get("progress")
-        return prog
+        # the printer resets the progress to 0 a few seconds after a failure (and after a restart):
+        # the furthest value seen counts
+        values = [v for v in (snap.get("progress"), active.get("progress")) if v is not None]
+        return max(values) if values else None
 
     # ---------------- history import ----------------
     def import_timeline(self, prefix, timeline, values_at, name=None):

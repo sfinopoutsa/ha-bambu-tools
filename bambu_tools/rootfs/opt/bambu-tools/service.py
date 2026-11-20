@@ -170,7 +170,10 @@ def backfill(ws, hist, printers):
         other = {k: _series(res, f"sensor.{prefix}_{k}") for k in keys}
 
         def values_at(t):
-            return snapshot({f"sensor.{prefix}_{k}": {"state": _value_at(other[k], t)} for k in keys}, prefix)
+            snap = snapshot({f"sensor.{prefix}_{k}": {"state": _value_at(other[k], t)} for k in keys}, prefix)
+            # the progress is reset to 0 a few seconds after the end: take the value just before it
+            snap["progress"] = number(_value_at(other["print_progress"], t - timedelta(seconds=6)))
+            return snap
 
         n = hist.import_timeline(prefix, _series(res, info["status"]), values_at, info["name"])
         done.add(prefix)
@@ -194,7 +197,7 @@ def repair_progress(ws, hist, printers):
             values = [number(s) for _, s in _series(res, f"sensor.{prefix}_print_progress")]
             values = [v for v in values if v is not None]
             if values:
-                hist.set_progress(job, max(values) if job["result"] == "stopped" else values[-1])
+                hist.set_progress(job, max(values))  # the printer resets it to 0 just after the end
                 log(f"{prefix}: progress {job['progress']:.0f}% for the {job['result']} print {job['file']}")
             else:
                 job["progress"] = None
